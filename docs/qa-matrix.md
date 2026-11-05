@@ -13,8 +13,8 @@ Executar em iPhone físico com ARKit e Android físico compatível com Google Pl
 | UI-04 | Fechar/reabrir app | Cadastro local ainda aparece |
 | UI-05 | Excluir local | Removido do aparelho após confirmação |
 | AR-01 | Abrir laboratório | Camera AR funciona em hardware suportado |
-| AR-02 | Apontar para piso texturizado | Hit test encontra plano medido; pode levar tempo |
-| AR-03 | Não há plano sob a mira | App mostra aviso e não inventa posição |
+| AR-02 | Apontar para piso texturizado | Raycast usa vetor real da câmera; pode retornar plano medido, DepthPoint ou estimativa identificada |
+| AR-03 | Não há plano sob a mira | Exibir contagem/tipos nativos do último hit test; sem plano, profundidade ou estimativa, bloquear posicionamento |
 | AR-04 | Criar Texto 3D | Aparece na pose escolhida e no arquivo de rascunhos |
 | AR-05 | Criar Cartão | Aparece suporte expositivo simples; ainda não é foto real |
 | AR-06 | Alternar Criar → Visualizar | Objetos mantêm posição **na mesma sessão** |
@@ -47,3 +47,12 @@ npx expo run:ios --device
 ```
 
 **Nota:** GitHub Actions valida somente testes TS/domínio e typecheck (quando configurado). Build/assinatura e câmera RA devem ser testados em dispositivo físico. Não registrar este protótipo como aprovado sem os dois.
+
+### Diagnóstico iPhone / superfície horizontal
+
+- Apontar para um detalhe texturizado da parede ou piso antes de testar a cama, aguardando **RASTREAMENTO ATIVO** e **DIREÇÃO DA CÂMERA: OK**.
+- Inclinar a câmera para a cama; a direção do raycast deve acompanhar a inclinação real (não usar `[0,0,-1]` constante).
+- Anotar **ÚLTIMO TESTE**: `ExistingPlane*` indica plano reconhecido; `DepthPoint` indica profundidade LiDAR; `EstimatedHorizontalPlane` é posição provisória; `FeaturePoint` sozinho não basta.
+- Se `0 resultados` e `PROFUNDIDADE: PENDENTE`, registrar o log de ARKit `poor slam` / `Frame has no valid depth` e testar novamente com boa luz, movimento lento e superfícies com contraste.
+- Repetir com mesa rígida e cama, pois superfícies macias/texturalmente uniformes podem não gerar planos reconhecidos com a mesma confiabilidade.
+- Confirmar que a mensagem de sucesso **não afirma plano confirmado** ao usar estimativa ou profundidade.
