@@ -64,3 +64,16 @@ O build de desenvolvimento não contém obrigatoriamente um bundle JavaScript em
 6. Mensagens como `FigCaptureSourceRemote` e `poor slam` exigem observar tracking e câmera no aparelho; elas não demonstram isoladamente um crash fatal. Fechar outros apps que estejam usando câmera e testar em local iluminado e texturizado.
 
 Nenhuma alteração desta correção toca no app SwiftUI, seu ARWorldMap, Supabase ou conteúdo compartilhado.
+
+## Instalação npm / React 19
+
+A versão do React neste experimento é **19.2.3**. O `react-dom` opcional requisitado pelo Expo também está fixado em **19.2.3**, para impedir que npm escolha `19.3.x` e rejeite o peer dependency com `ERESOLVE`.
+
+```sh
+npm install
+npm run deps:check
+npm run test
+npm run typecheck
+```
+
+**Não use `--force` nem `--legacy-peer-deps`** para contornar este conflito. Depois de validar a instalação local, `package-lock.json` deve ser versionado para instalações reproduzíveis.
