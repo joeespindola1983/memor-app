@@ -10,7 +10,11 @@
       "bundleIdentifier": "com.espindola.memor.app.qa",
       "supportsTablet": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "O Memor usa a câmera para testar a criação e visualização de intervenções em realidade aumentada."
+        "NSCameraUsageDescription": "O Memor usa a câmera para testar a criação e visualização de intervenções em realidade aumentada.",
+        "NSLocalNetworkUsageDescription": "O Memor QA precisa acessar o servidor de desenvolvimento Metro neste computador para executar os testes durante o desenvolvimento.",
+        "NSBonjourServices": [
+          "_expo._tcp"
+        ]
       }
     },
     "android": {

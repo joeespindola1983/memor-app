@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   ViroARScene, ViroAmbientLight, ViroBox, ViroMaterials, ViroNode, ViroText,
+  ViroTrackingStateConstants,
 } from "@reactvision/react-viro";
 import { useARSession } from "./session";
+import { sceneBridge } from "./sceneBridge";
 
 ViroMaterials.createMaterials({
   memorPanel: { diffuseColor: "#D7F5DF" },
@@ -13,12 +15,25 @@ ViroMaterials.createMaterials({
 const labelStyle = { fontSize: 22, color: "#17271C", textAlign: "center" as const };
 
 export default function ARLabScene() {
+  const sceneRef = useRef<ViroARScene>(null);
+  useEffect(() => sceneBridge.registerRaycaster(async () => {
+    if (!sceneRef.current) throw new Error("Cena AR ainda não foi montada.");
+    return await sceneRef.current.performARHitTestWithRay([0, 0, -1]);
+  }), []);
   // Each intervention is visible only in this tracked session. A different
   // AR session has a different origin and requires a real localization anchor.
   const session = useARSession();
   const artworks = useMemo(() => session.artworks, [session.artworks]);
   return (
-    <ViroARScene anchorDetectionTypes={["PlanesHorizontal", "PlanesVertical"]}>
+    <ViroARScene
+      ref={sceneRef}
+      anchorDetectionTypes={["PlanesHorizontal", "PlanesVertical"]}
+      onTrackingUpdated={(state) => {
+        sceneBridge.setTracking(state === ViroTrackingStateConstants.TRACKING_NORMAL
+          ? "ready" : state === ViroTrackingStateConstants.TRACKING_LIMITED
+          ? "limited" : "starting");
+      }}
+    >
       <ViroAmbientLight color="#ffffff" intensity={220} />
       {artworks.map((item) => (
         <ViroNode key={item.id} position={item.sessionPosition}>

@@ -51,3 +51,16 @@ Consulte [docs/architecture.md](docs/architecture.md) e [docs/qa-matrix.md](docs
 ## Resultado esperado
 
 Esta primeira etapa valida UX, build cross-platform, detecção de superfície e criação/visualização **na mesma sessão**. Só depois implementaremos localização persistente cross-platform e imagens reais. Não confundir reprodução de uma posição `[x,y,z]` em outra sessão com relocalização do mundo físico.
+
+## Troubleshooting iPhone / Metro / ARKit
+
+O build de desenvolvimento não contém obrigatoriamente um bundle JavaScript embutido. O servidor **Metro deve estar acessível** enquanto o app é aberto no iPhone.
+
+1. No iPhone, permitir **Memor QA** em **Ajustes → Privacidade e Segurança → Rede Local**, e confirmar a permissão de câmera. O app declara `NSLocalNetworkUsageDescription` e `_expo._tcp` para o desenvolvimento.
+2. Mac e iPhone na mesma rede Wi-Fi (sem isolamento de clientes/VPN bloqueando a LAN). O iPhone deve conseguir abrir `http://IP_DO_MAC:8081/status` no Safari, com resposta `packager-status:running`.
+3. Rodar no primeiro terminal `npx expo start --dev-client --lan --clear`; no segundo, `npx expo run:ios --device --no-bundler`. O primeiro comando fica aberto.
+4. Se a permissão de Rede Local ainda não aparecer, reconstruir com `npx expo prebuild --clean --platform ios` e `npx expo run:ios --device --no-bundler`. **Não é necessário apagar os rascunhos do aparelho para tentar de novo**.
+5. Na tela de RA, esperar **RASTREAMENTO ATIVO** antes de criar. O teste de posição agora roda por `ViroARScene.performARHitTestWithRay`, usando a cena montada — não o navigator.
+6. Mensagens como `FigCaptureSourceRemote` e `poor slam` exigem observar tracking e câmera no aparelho; elas não demonstram isoladamente um crash fatal. Fechar outros apps que estejam usando câmera e testar em local iluminado e texturizado.
+
+Nenhuma alteração desta correção toca no app SwiftUI, seu ARWorldMap, Supabase ou conteúdo compartilhado.

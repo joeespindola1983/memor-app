@@ -1,6 +1,6 @@
 import { ViroARSceneNavigator } from "@reactvision/react-viro";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView, Platform, Pressable, StyleSheet,
   Text, TextInput, View,
@@ -9,16 +9,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActionButton } from "../../src/components/ActionButton";
 import { PixelLabel } from "../../src/components/PixelLabel";
 import ARLabScene from "../../src/ar/ARLabScene";
-import { pickMeasuredPlaneHit, type ARHit } from "../../src/ar/hitTest";
+import { pickMeasuredPlaneHit } from "../../src/ar/hitTest";
+import { sceneBridge, useSceneTracking } from "../../src/ar/sceneBridge";
 import { arSession, useARSession } from "../../src/ar/session";
 import { usePlaces } from "../../src/data/PlaceStore";
 import type { ArtworkKind } from "../../src/domain/models";
 import { shared, tokens } from "../../src/theme/tokens";
-
-// The native session exposes hit tests via arSceneNavigator (ViroReact 3.x).
-// Keep this adapter isolated so future VPS implementation can replace it.
-type PlaneQuery = { performARHitTestWithRay?: (ray: number[]) => Promise<ARHit[]> };
-type NativeNavigator = { arSceneNavigator?: PlaneQuery };
 
 export default function ARExperience() {
   const router = useRouter();
@@ -26,9 +22,9 @@ export default function ARExperience() {
   const insets = useSafeAreaInsets();
   const { places, addArtwork } = usePlaces();
   const place = places.find((item) => item.id === id);
-  const navRef = useRef<InstanceType<typeof ViroARSceneNavigator> | null>(null);
   const firstScene = useMemo(() => ({ scene: ARLabScene }), []);
   const session = useARSession();
+  const tracking = useSceneTracking();
   const [kind, setKind] = useState<ArtworkKind>("text");
   const [label, setLabel] = useState("Minha primeira intervenção");
   const [placing, setPlacing] = useState(false);
@@ -45,10 +41,10 @@ export default function ARExperience() {
     setPlacing(true);
     setProblem("");
     try {
-      const native = navRef.current as unknown as NativeNavigator | null;
-      const hitTest = native?.arSceneNavigator?.performARHitTestWithRay;
-      if (!hitTest) throw new Error("A sessão AR ainda não está pronta. Verifique a compatibilidade do aparelho.");
-      const hits = await hitTest.call(native?.arSceneNavigator, [0, 0, -1]);
+      if (tracking.status !== "ready") {
+        throw new Error("Rastreamento ainda não está normal. Observe superfícies fixas e bem iluminadas.");
+      }
+      const hits = await sceneBridge.raycast();
       const position = pickMeasuredPlaneHit(hits);
       if (!position) {
         throw new Error("Nenhum plano real sob a mira. Aponte para o chão, um banco ou uma parede com textura.");
@@ -69,9 +65,9 @@ export default function ARExperience() {
   return (
     <View style={styles.root}>
       <ViroARSceneNavigator
-        ref={navRef}
         initialScene={firstScene}
         provider="none"
+        hdrEnabled={false}
         style={StyleSheet.absoluteFill}
       />
 
@@ -87,6 +83,9 @@ export default function ARExperience() {
           {place.title}
         </Text>
         <PixelLabel color={tokens.muted}>LABORATÓRIO RA · {session.artworks.length} NESTA SESSÃO</PixelLabel>
+        <PixelLabel color={tracking.status === "ready" ? tokens.dark : tokens.muted}>
+          {tracking.status === "ready" ? "● RASTREAMENTO ATIVO" : tracking.status === "limited" ? "◌ RASTREAMENTO LIMITADO" : "◌ INICIANDO ARKIT / ARCORE"}
+        </PixelLabel>
       </View>
 
       <KeyboardAvoidingView
@@ -126,7 +125,7 @@ export default function ARExperience() {
                 placeholder="Nome da obra" placeholderTextColor={tokens.muted}
               />
               <ActionButton label="POSICIONAR NA MIRA +" loading={placing}
-                disabled={!label.trim() || placing} onPress={placeAtReticle}/>
+                disabled={!label.trim() || placing || tracking.status !== "ready"} onPress={placeAtReticle}/>
             </View>
           ) : (
             <View style={{ gap: 9 }}>
@@ -143,7 +142,8 @@ export default function ARExperience() {
           )}
           {problem ? <Text style={{ color: "#A23D34", fontSize: 12 }}>{problem}</Text> :
             <Text style={[shared.secondary, { fontSize: 11 }]}>{placing ?
-              "Consultando ARKit/ARCore..." : message}</Text>}
+              "Consultando ARKit/ARCore..." : tracking.status !== "ready" ?
+              "Aguarde o rastreamento ficar ativo. Evite superfícies lisas e movimentos rápidos." : message}</Text>}
         </View>
       </KeyboardAvoidingView>
     </View>
