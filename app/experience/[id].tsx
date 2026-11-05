@@ -2,7 +2,7 @@ import { ViroARSceneNavigator } from "@reactvision/react-viro";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet,
+  KeyboardAvoidingView, Platform, Pressable, StyleSheet,
   Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,7 +26,7 @@ export default function ARExperience() {
   const insets = useSafeAreaInsets();
   const { places, addArtwork } = usePlaces();
   const place = places.find((item) => item.id === id);
-  const navRef = useRef<ViroARSceneNavigator | null>(null);
+  const navRef = useRef<InstanceType<typeof ViroARSceneNavigator> | null>(null);
   const firstScene = useMemo(() => ({ scene: ARLabScene }), []);
   const session = useARSession();
   const [kind, setKind] = useState<ArtworkKind>("text");
