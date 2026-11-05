@@ -16,9 +16,9 @@ const labelStyle = { fontSize: 22, color: "#17271C", textAlign: "center" as cons
 
 export default function ARLabScene() {
   const sceneRef = useRef<ViroARScene>(null);
-  useEffect(() => sceneBridge.registerRaycaster(async () => {
+  useEffect(() => sceneBridge.registerRaycaster(async (cameraForward) => {
     if (!sceneRef.current) throw new Error("Cena AR ainda não foi montada.");
-    return await sceneRef.current.performARHitTestWithRay([0, 0, -1]);
+    return await sceneRef.current.performARHitTestWithRay(cameraForward);
   }), []);
   // Each intervention is visible only in this tracked session. A different
   // AR session has a different origin and requires a real localization anchor.
@@ -27,6 +27,10 @@ export default function ARLabScene() {
   return (
     <ViroARScene
       ref={sceneRef}
+      onCameraTransformUpdate={(camera) => {
+        sceneBridge.setCameraForward(camera.forward);
+      }}
+      onDepthReady={() => sceneBridge.setDepthReady(true)}
       anchorDetectionTypes={["PlanesHorizontal", "PlanesVertical"]}
       onTrackingUpdated={(state) => {
         sceneBridge.setTracking(state === ViroTrackingStateConstants.TRACKING_NORMAL
