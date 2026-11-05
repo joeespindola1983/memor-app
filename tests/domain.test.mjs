@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { makePlace, makeArtwork, cleanTitle, isPlace } from "../src/domain/models.ts";
-import { pickMeasuredPlaneHit } from "../src/ar/hitTest.ts";
+import { pickMeasuredPlaneHit, selectPlacementHit, normalizeCameraForward, summarizeHits } from "../src/ar/hitTest.ts";
 
 test("place names are normalized and metadata starts empty", () => {
   const p = makePlace("  Praça   do  Museu ");
@@ -34,4 +34,27 @@ test("a pose in draft is not a persistent localization ID", () => {
   const art = makeArtwork("card", "Cartão", [0.2, 0.9, -1.4]);
   assert.equal("cloudAnchorId" in art, false);
   assert.equal("arWorldMap" in art, false);
+});
+
+test("ray follows camera tilt", () => {
+  const ray = normalizeCameraForward([0, -3, -4]);
+  assert.ok(ray && Math.abs(ray[1] + 0.6) < 0.00001);
+  assert.equal(normalizeCameraForward([0, 0, 0]), null);
+});
+test("measured planes outrank depth and estimates", () => {
+  const result = selectPlacementHit([
+    {type:"EstimatedHorizontalPlane", transform:{position:[1,2,3]}},
+    {type:"DepthPoint", hasDepthData:true, transform:{position:[2,3,4]}},
+    {type:"ExistingPlaneUsingExtent", transform:{position:[4,5,6]}},
+  ]);
+  assert.deepEqual(result, {position:[4,5,6], source:"plane"});
+});
+test("depth and estimates are distinguished", () => {
+  assert.deepEqual(selectPlacementHit([{type:"DepthPoint",hasDepthData:true,transform:{position:[0,1,-2]}}]), {position:[0,1,-2], source:"depth"});
+  assert.deepEqual(selectPlacementHit([{type:"EstimatedHorizontalPlane",transform:{position:[0,1,-2]}}]), {position:[0,1,-2], source:"estimated"});
+  assert.equal(selectPlacementHit([{type:"FeaturePoint",transform:{position:[0,1,-2]}}]), null);
+  assert.equal(selectPlacementHit([{type:"DepthPoint",hasDepthData:false,transform:{position:[0,1,-2]}}]), null);
+});
+test("hit summary shows native result types", () => {
+  assert.equal(summarizeHits([{type:"FeaturePoint"},{type:"DepthPoint"},{type:"DepthPoint"}]), "FeaturePoint: 1 · DepthPoint: 2");
 });
