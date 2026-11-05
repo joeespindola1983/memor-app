@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActionButton } from "../../src/components/ActionButton";
 import { PixelLabel } from "../../src/components/PixelLabel";
 import ARLabScene from "../../src/ar/ARLabScene";
-import { pickMeasuredPlaneHit } from "../../src/ar/hitTest";
+import { selectPlacementHit, summarizeHits } from "../../src/ar/hitTest";
 import { sceneBridge, useSceneTracking } from "../../src/ar/sceneBridge";
 import { arSession, useARSession } from "../../src/ar/session";
 import { usePlaces } from "../../src/data/PlaceStore";
@@ -30,6 +30,7 @@ export default function ARExperience() {
   const [placing, setPlacing] = useState(false);
   const [message, setMessage] = useState("Procure uma superfície bem iluminada.");
   const [problem, setProblem] = useState("");
+  const [lastHitSummary, setLastHitSummary] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) arSession.start(String(id));
@@ -45,13 +46,26 @@ export default function ARExperience() {
         throw new Error("Rastreamento ainda não está normal. Observe superfícies fixas e bem iluminadas.");
       }
       const hits = await sceneBridge.raycast();
-      const position = pickMeasuredPlaneHit(hits);
-      if (!position) {
-        throw new Error("Nenhum plano real sob a mira. Aponte para o chão, um banco ou uma parede com textura.");
+      const summary = summarizeHits(hits);
+      setLastHitSummary(summary);
+      console.info("[Memor AR] Hit test:", {
+        summary,
+        cameraForward: sceneBridge.getCameraDirection(),
+        depthReady: tracking.depthReady,
+      });
+      const placement = selectPlacementHit(hits);
+      if (!placement) {
+        throw new Error(hits.length === 0
+          ? "O raycast não encontrou referências neste ponto. Explore o quarto devagar e volte a apontar para a cama."
+          : "O ARKit encontrou referências, mas nenhuma superfície utilizável. Tente mudar o ângulo ou se aproximar.");
       }
-      const saved = await addArtwork(place.id, kind, label, position);
+      const saved = await addArtwork(place.id, kind, label, placement.position);
       arSession.addArtwork(saved);
-      setMessage("Intervenção posicionada. Toque em VISUALIZAR para conferir.");
+      setMessage(placement.source === "plane"
+        ? "Plano reconhecido. Intervenção posicionada: toque em VISUALIZAR."
+        : placement.source === "depth"
+        ? "Posicionado com profundidade LiDAR. Resultado experimental, não um plano confirmado."
+        : "Posicionamento estimado. Ainda não é um plano reconhecido: confira o alinhamento visual.");
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "Falha ao posicionar intervenção.");
     } finally {
@@ -67,6 +81,7 @@ export default function ARExperience() {
       <ViroARSceneNavigator
         initialScene={firstScene}
         provider="none"
+        depthEnabled={true}
         hdrEnabled={false}
         style={StyleSheet.absoluteFill}
       />
@@ -85,6 +100,11 @@ export default function ARExperience() {
         <PixelLabel color={tokens.muted}>LABORATÓRIO RA · {session.artworks.length} NESTA SESSÃO</PixelLabel>
         <PixelLabel color={tracking.status === "ready" ? tokens.dark : tokens.muted}>
           {tracking.status === "ready" ? "● RASTREAMENTO ATIVO" : tracking.status === "limited" ? "◌ RASTREAMENTO LIMITADO" : "◌ INICIANDO ARKIT / ARCORE"}
+        </PixelLabel>
+        <PixelLabel color={tokens.muted}>
+          {tracking.hasCameraDirection ? "DIREÇÃO DA CÂMERA: OK" : "AGUARDANDO ORIENTAÇÃO DA CÂMERA"}
+          {" · "}
+          {tracking.depthReady ? "PROFUNDIDADE: PRONTA" : "PROFUNDIDADE: PENDENTE"}
         </PixelLabel>
       </View>
 
@@ -125,7 +145,8 @@ export default function ARExperience() {
                 placeholder="Nome da obra" placeholderTextColor={tokens.muted}
               />
               <ActionButton label="POSICIONAR NA MIRA +" loading={placing}
-                disabled={!label.trim() || placing || tracking.status !== "ready"} onPress={placeAtReticle}/>
+                disabled={!label.trim() || placing || tracking.status !== "ready" || !tracking.hasCameraDirection}
+                onPress={placeAtReticle}/>
             </View>
           ) : (
             <View style={{ gap: 9 }}>
@@ -144,6 +165,11 @@ export default function ARExperience() {
             <Text style={[shared.secondary, { fontSize: 11 }]}>{placing ?
               "Consultando ARKit/ARCore..." : tracking.status !== "ready" ?
               "Aguarde o rastreamento ficar ativo. Evite superfícies lisas e movimentos rápidos." : message}</Text>}
+          {lastHitSummary ? (
+            <Text selectable style={[shared.secondary, { fontFamily: "monospace", fontSize: 10 }]}>
+              ÚLTIMO TESTE: {lastHitSummary}
+            </Text>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </View>
