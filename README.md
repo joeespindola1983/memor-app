@@ -77,3 +77,9 @@ npm run typecheck
 ```
 
 **Não use `--force` nem `--legacy-peer-deps`** para contornar este conflito. Depois de validar a instalação local, `package-lock.json` deve ser versionado para instalações reproduzíveis.
+
+### Diagnóstico de superfícies (raycast)
+
+A partir desta revisão, a cena AR passa a direção real da câmera (`onCameraTransformUpdate.forward`) para `performARHitTestWithRay`. O vetor fixo `[0, 0, -1]` anterior não acompanhava a inclinação do celular. O navigator usa `depthEnabled`, permitindo resultados `DepthPoint` em aparelhos compatíveis.
+
+A experiência mostra **DIREÇÃO DA CÂMERA**, **PROFUNDIDADE** e **ÚLTIMO TESTE**. A seleção prioriza plano real, depois profundidade real e por último plano horizontal estimado. Estimativas ficam explicitamente identificadas como **experimentais** e os dados seguem sem relocalização espacial persistente. Se o log do iPhone registrar `poor slam`, o ARKit ainda pode não conseguir fornecer nenhum resultado mesmo com o código corrigido.
