@@ -1,4 +1,9 @@
-import { isVec3, type Vec3 } from "../domain/models.ts";
+import type { Vec3 } from "../domain/models";
+
+function isVec3(value: unknown): value is Vec3 {
+  return Array.isArray(value) && value.length === 3 &&
+    value.every((part) => typeof part === "number" && Number.isFinite(part));
+}
 
 export type ARHit = {
   type: string;
