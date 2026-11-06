@@ -9,6 +9,7 @@
     "android": "expo run:android --device",
     "prebuild": "expo prebuild",
     "typecheck": "tsc --noEmit",
+    "native:check": "node scripts/verify-native-autolinking.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "deps:check": "npm ls react react-dom --depth=0",
     "pretest": "npm run typecheck"

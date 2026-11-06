@@ -1,4 +1,4 @@
-import { requireNativeModule } from "expo";
+import { requireOptionalNativeModule } from "expo";
 import { requireNativeViewManager } from "expo-modules-core";
 import type { ComponentType, RefAttributes } from "react";
 import type { ViewProps } from "react-native";
@@ -38,10 +38,12 @@ type WorldMapModule = {
   importMap(id: string, fileUri: string): Promise<WorldMapFile>;
 };
 
-export const MemorWorldMapView =
-  (Platform.OS === "ios" ? requireNativeViewManager("MemorWorldMap") : null) as
-    ComponentType<WorldMapViewProps> | null;
+// A JS bundle can briefly run inside an older development build. Do not crash
+// every Expo Router screen merely because this binary lacks the new Swift pod.
+// An unavailable native module is a BLOCKER for map operations, not a reason
+// to silently start a session-only Viro capture.
+export const worldMapNative: WorldMapModule | null =
+  Platform.OS === "ios" ? requireOptionalNativeModule<WorldMapModule>("MemorWorldMap") : null;
 
-export const worldMapNative =
-  (Platform.OS === "ios" ? requireNativeModule("MemorWorldMap") : null) as
-    WorldMapModule | null;
+export const MemorWorldMapView: ComponentType<WorldMapViewProps> | null =
+  worldMapNative ? requireNativeViewManager("MemorWorldMap") : null;

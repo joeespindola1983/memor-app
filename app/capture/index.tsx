@@ -23,8 +23,25 @@ const rvConfigured = Constants.expoConfig?.extra?.reactvisionConfigured === true
  * Native diagnostic metrics remain in the scan bridge, not the user interface.
  */
 export default function CapturePlaceScreen() {
-  return Platform.OS === "ios" && MemorWorldMapView
-    ? <NativeCapturePlaceScreen /> : <LegacyViroCapturePlaceScreen />;
+  if (Platform.OS === "ios") {
+    return MemorWorldMapView ? <NativeCapturePlaceScreen /> : <MissingWorldMapBuild />;
+  }
+  return <LegacyViroCapturePlaceScreen />;
+}
+
+function MissingWorldMapBuild() {
+  const router = useRouter();
+  return (
+    <View style={[styles.root, { padding: 24, justifyContent: "center", gap: 18 }]}>
+      <Text style={[styles.title, { color: tokens.white }]}>O motor espacial precisa ser instalado.</Text>
+      <Text style={{ color: tokens.white, lineHeight: 22 }}>
+        Este build do Memor ainda não inclui o módulo Swift MemorWorldMap.
+        Instale um novo build nativo iOS para capturar e revisitar mapas offline.
+        Nenhuma captura será substituída por uma sessão temporária.
+      </Text>
+      <MemorActionButton label="VOLTAR" onPress={() => router.replace("/(tabs)/archive")} />
+    </View>
+  );
 }
 
 function LegacyViroCapturePlaceScreen() {
