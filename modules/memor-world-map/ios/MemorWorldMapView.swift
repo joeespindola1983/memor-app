@@ -12,6 +12,9 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
   private var mapID: String?
   private var titles: [String: String] = [:]
   private var markersJSON = "[]"
+  private var photoURLs: [String: URL] = [:]
+  private var lastTrackingSignature = ""
+  private var sessionID = UUID().uuidString
   private var sawRelocalizing = false
   private var localized = false
   private var expanding = false
@@ -26,6 +29,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
     scene.automaticallyUpdatesLighting = false
     scene.autoenablesDefaultLighting = false
     addSubview(scene)
+    MemorSpatialTrace.write("engine.initialized", fields: ["session": sessionID])
   }
 
   override public func layoutSubviews() {
@@ -37,6 +41,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
     super.didMoveToWindow()
     if window == nil {
       scene.session.pause()
+      MemorSpatialTrace.write("session.paused", fields: ["session": sessionID])
     } else {
       openSession()
     }
@@ -89,14 +94,72 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
     markersJSON = json
     guard let data = json.data(using: .utf8),
           let items = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else {
-      titles = [:]
+      MemorSpatialTrace.write("render.metadata.invalid")
       return
     }
-    titles = Dictionary(items.compactMap { item -> (String, String)? in
-      guard let id = item["id"], let title = item["title"],
-            !id.isEmpty, !title.isEmpty else { return nil }
-      return ("memor.text." + id, title)
-    }, uniquingKeysWith: { _, last in last })
+    var nextTitles: [String: String] = [:]
+    var nextPhotos: [String: URL] = [:]
+    for item in items {
+      guard let id = item["id"], let title = item["title"], !title.isEmpty,
+            UUID(uuidString: id) != nil else { continue }
+      if item["kind"] == "photo", let mapID {
+        let name = "memor.photo." + id.lowercased()
+        nextTitles[name] = title
+        nextPhotos[name] = Self.photoURL(for: mapID, artworkID: id)
+      } else if item["kind"] == "text" || item["kind"] == nil {
+        nextTitles["memor.text." + id.lowercased()] = title
+      }
+    }
+    titles = nextTitles
+    photoURLs = nextPhotos
+    MemorSpatialTrace.write("render.metadata.loaded", fields: [
+      "textCount": nextTitles.count - nextPhotos.count, "photoCount": nextPhotos.count
+    ])
+    refreshArtworkNodes()
+  }
+
+  static func photoURL(for mapID: String, artworkID: String) -> URL {
+    // Both IDs must be UUIDs before the path is used.
+    let root = (try? url(for: mapID))?.deletingLastPathComponent()
+    return (root ?? FileManager.default.temporaryDirectory)
+      .appendingPathComponent("media", isDirectory: true)
+      .appendingPathComponent(artworkID.lowercased() + ".jpg")
+  }
+
+  private func refreshArtworkNodes() {
+    for anchor in scene.session.currentFrame?.anchors ?? [] {
+      guard let name = anchor.name, WorldMapAnchorPersistence.isInterventionAnchor(name),
+            let node = scene.node(for: anchor) else { continue }
+      renderArtwork(name: name, on: node)
+    }
+  }
+
+  private func renderArtwork(name: String, on node: SCNNode) {
+    node.childNodes.filter { $0.name == "memor.rendered.artwork" }.forEach { $0.removeFromParentNode() }
+    guard let title = titles[name] else {
+      MemorSpatialTrace.write("render.metadata.missing", fields: ["anchor": name])
+      return
+    }
+    let kind = name.hasPrefix("memor.photo.") ? "photo" : "text"
+    guard let artwork = MemorArtworkSceneFactory.node(
+      kind: kind, title: title, photoURL: photoURLs[name]
+    ) else {
+      MemorSpatialTrace.write("render.asset.unavailable", fields: ["anchor": name, "kind": kind])
+      return
+    }
+    // The node is a SceneKit container associated with the world anchor.
+    // Adding the card after the metadata arrives fixes the empty-node race.
+    for child in artwork.childNodes {
+      child.removeFromParentNode()
+      node.addChildNode(child)
+    }
+    let projected = scene.projectPoint(node.worldPosition)
+    let inViewport = projected.z > 0 && projected.z < 1 &&
+      projected.x >= 0 && projected.x <= Float(scene.bounds.width) &&
+      projected.y >= 0 && projected.y <= Float(scene.bounds.height)
+    MemorSpatialTrace.write("render.node.attached", fields: [
+      "anchor": name, "kind": kind, "inViewport": inViewport
+    ])
   }
 
   private func openSession() {
@@ -108,12 +171,18 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
     localized = false
     sawRelocalizing = false
     lastStatus = -1
+    lastTrackingSignature = ""
+    sessionID = UUID().uuidString
+    MemorSpatialTrace.write("session.open", fields: ["session": sessionID, "restoring": mapID != nil])
     if let id = mapID {
       do {
-        configuration.initialWorldMap = try Self.readMap(Self.url(for: id))
+        let restoredMap = try Self.readMap(Self.url(for: id))
+        configuration.initialWorldMap = restoredMap
+        MemorSpatialTrace.write("map.restore.loaded", fields: ["anchorCount": restoredMap.anchors.count, "session": sessionID])
         // Keep plane hit-tests available for placing new works; LiDAR mesh
         // reconstruction remains disabled except during explicit expansion.
       } catch {
+        MemorSpatialTrace.write("map.restore.failed")
         sendError("Não foi possível abrir o mapa salvo: \(error.localizedDescription)")
         return
       }
@@ -123,6 +192,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
   }
 
   private func sendError(_ message: String) {
+    MemorSpatialTrace.write("session.error", fields: ["session": sessionID])
     onStatus([
       "tracking": "starting", "mapping": "unavailable",
       "localized": false, "expanding": expanding,
@@ -161,6 +231,14 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
     let mapping = mapName(frame.worldMappingStatus)
     DispatchQueue.main.async { [weak self] in
       guard let self, self.window != nil else { return }
+      let signature = state + "/" + mapping + "/" + String(didRelocalize)
+      if signature != self.lastTrackingSignature {
+        self.lastTrackingSignature = signature
+        MemorSpatialTrace.write("tracking.changed", fields: [
+          "session": self.sessionID, "tracking": state, "mapping": mapping,
+          "localized": didRelocalize, "anchors": frame.anchors.count
+        ])
+      }
       self.localized = didRelocalize
       self.onStatus([
         "tracking": state,
@@ -189,6 +267,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
       return
     }
     busy = true
+    MemorSpatialTrace.write("map.capture.started")
     let id = UUID().uuidString.lowercased()
     scene.session.getCurrentWorldMap { [weak self] map, error in
       guard let map else {
@@ -205,6 +284,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
           try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                    withIntermediateDirectories: true)
           try data.write(to: url, options: .atomic)
+          MemorSpatialTrace.write("map.capture.saved", fields: ["id": id, "bytes": data.count, "anchors": map.anchors.count])
           DispatchQueue.main.async {
             self?.busy = false
             promise.resolve(Self.fileRecord(id: id, url: url, byteCount: data.count))
@@ -243,6 +323,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
       return
     }
     setExpansion(true)
+    MemorSpatialTrace.write("map.expansion.started")
     promise.resolve(nil)
   }
 
@@ -253,6 +334,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
     }
     // The on-disk worldmap.archive remains unchanged.
     setExpansion(false)
+    MemorSpatialTrace.write("map.expansion.canceled")
     promise.resolve(nil)
   }
 
@@ -294,6 +376,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
             DispatchQueue.main.async {
               self.busy = false
               self.setExpansion(false)
+              MemorSpatialTrace.write("map.expansion.saved", fields: ["id": id, "bytes": data.count])
               promise.resolve(Self.fileRecord(id: id, url: url, byteCount: data.count))
             }
           } catch {
@@ -339,12 +422,160 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
         DispatchQueue.main.async {
           self.busy = false
           self.openSession()  // Reset only when restoring a DIFFERENT map version.
+          MemorSpatialTrace.write("map.revision.restored", fields: ["id": id, "original": original])
           promise.resolve(Self.fileRecord(id: id, url: url, byteCount: data.count))
         }
       } catch {
         DispatchQueue.main.async {
           self.busy = false
           promise.reject("ERR_RESTORE", error.localizedDescription)
+        }
+      }
+    }
+  }
+
+  /// Release the camera while UIImagePickerController is capturing a photo.
+  /// After returning, restart using initialWorldMap: the user must relocalize
+  /// before placing the captured image at a physical point.
+  func pauseForPhoto(promise: Promise) {
+    guard mapID != nil, !busy, !expanding else {
+      promise.reject("ERR_NOT_READY", "Feche as operações espaciais antes de fotografar.")
+      return
+    }
+    scene.session.pause()
+    localized = false
+    MemorSpatialTrace.write("photo.camera.paused", fields: ["session": sessionID])
+    onStatus(["tracking": "starting", "mapping": "unavailable", "localized": false,
+              "expanding": false, "mapId": mapID as Any? ?? NSNull()])
+    promise.resolve(nil)
+  }
+
+  func resumeAfterPhoto(promise: Promise) {
+    guard mapID != nil else {
+      promise.reject("ERR_NO_MAP", "Não existe mapa espacial para reabrir.")
+      return
+    }
+    MemorSpatialTrace.write("photo.camera.resuming")
+    openSession()
+    promise.resolve(nil)
+  }
+
+  /// Convert the temporary iOS camera image to a private JPEG, then commit a
+  /// named ARAnchor in the existing ARWorldMap. Never log image pixels or paths.
+  func placePhoto(id: String, caption: String, sourceURI: String, promise: Promise) {
+    guard let mapID, localized, !busy, !expanding, UUID(uuidString: id) != nil,
+          let sourceURL = URL(string: sourceURI), sourceURL.isFileURL else {
+      MemorSpatialTrace.write("photo.placement.rejected", fields: ["id": id])
+      promise.reject("ERR_NOT_LOCALIZED", "Reconheça o lugar novamente antes de fixar a foto.")
+      return
+    }
+    let point = CGPoint(x: scene.bounds.midX, y: scene.bounds.midY)
+    guard let hit = scene.hitTest(
+      point, types: [.existingPlaneUsingGeometry, .existingPlaneUsingExtent, .featurePoint]
+    ).first else {
+      MemorSpatialTrace.write("photo.placement.noSurface", fields: ["id": id])
+      promise.reject("ERR_NO_SURFACE", "Aponte a mira para uma superfície reconhecida.")
+      return
+    }
+    let name = "memor.photo." + id.lowercased()
+    let anchor = ARAnchor(name: name, transform: hit.worldTransform)
+    let destination = Self.photoURL(for: mapID, artworkID: id)
+    busy = true
+    MemorSpatialTrace.write("photo.placement.started", fields: ["id": id, "hitType": hit.type.rawValue])
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      do {
+        let source = try Data(contentsOf: sourceURL)
+        guard source.count <= 25_000_000, let image = UIImage(data: source),
+              image.size.width > 0, image.size.height > 0 else {
+          throw NSError(domain: "MemorWorldMap", code: 11,
+                        userInfo: [NSLocalizedDescriptionKey: "A foto não pôde ser lida."])
+        }
+        let jpeg = image.jpegData(compressionQuality: 0.80)
+        guard let jpeg, jpeg.count <= 5_000_000 else {
+          throw NSError(domain: "MemorWorldMap", code: 12,
+                        userInfo: [NSLocalizedDescriptionKey: "A foto está muito grande."])
+        }
+        try FileManager.default.createDirectory(
+          at: destination.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try jpeg.write(to: destination, options: .atomic)
+        DispatchQueue.main.async {
+          guard let self, self.window != nil, self.localized else {
+            try? FileManager.default.removeItem(at: destination)
+            self?.busy = false
+            MemorSpatialTrace.write("photo.placement.relocalizationLost", fields: ["id": id])
+            promise.reject("ERR_TRACKING_CHANGED", "Reconheça o lugar novamente antes de posicionar a foto.")
+            return
+          }
+          self.titles[name] = caption.isEmpty ? "Fotografia" : caption
+          self.photoURLs[name] = destination
+          self.scene.session.add(anchor: anchor)
+          MemorSpatialTrace.write("photo.anchor.added", fields: ["id": id, "bytes": jpeg.count])
+          self.scene.session.getCurrentWorldMap { [weak self] map, error in
+            guard let self, let map else {
+              DispatchQueue.main.async {
+                self?.scene.session.remove(anchor: anchor)
+                self?.titles.removeValue(forKey: name)
+                self?.photoURLs.removeValue(forKey: name)
+                self?.busy = false
+                try? FileManager.default.removeItem(at: destination)
+                MemorSpatialTrace.write("photo.snapshot.failed", fields: ["id": id])
+                promise.reject("ERR_SNAPSHOT", error?.localizedDescription ?? "Falha ao preparar o mapa.")
+              }
+              return
+            }
+            DispatchQueue.global(qos: .utility).async {
+              do {
+                let url = try Self.url(for: mapID)
+                let previous = try Self.readMap(url)
+                let required = Set(previous.anchors.compactMap { anchor -> String? in
+                  guard let name = anchor.name,
+                        WorldMapAnchorPersistence.isInterventionAnchor(name) else { return nil }
+                  return name
+                })
+                map.anchors = WorldMapAnchorPersistence.merged(
+                  snapshot: map.anchors, previouslySaved: previous.anchors,
+                  requiredPreviousNames: required, adding: anchor
+                )
+                let archived = try NSKeyedArchiver.archivedData(
+                  withRootObject: map, requiringSecureCoding: true
+                )
+                _ = try MemorWorldMapArchiveHistory.replace(url, with: archived)
+                try? MemorWorldMapArchiveHistory.prune(url)
+                let t = anchor.transform
+                let matrix: [Float] = [
+                  t.columns.0.x, t.columns.0.y, t.columns.0.z, t.columns.0.w,
+                  t.columns.1.x, t.columns.1.y, t.columns.1.z, t.columns.1.w,
+                  t.columns.2.x, t.columns.2.y, t.columns.2.z, t.columns.2.w,
+                  t.columns.3.x, t.columns.3.y, t.columns.3.z, t.columns.3.w
+                ]
+                DispatchQueue.main.async {
+                  self.busy = false
+                  self.refreshArtworkNodes()
+                  MemorSpatialTrace.write("photo.anchor.saved", fields: [
+                    "id": id, "imageBytes": jpeg.count, "mapBytes": archived.count
+                  ])
+                  promise.resolve(["id": id, "transform": matrix, "photoUri": destination.absoluteString])
+                }
+              } catch {
+                DispatchQueue.main.async {
+                  self.scene.session.remove(anchor: anchor)
+                  self.titles.removeValue(forKey: name)
+                  self.photoURLs.removeValue(forKey: name)
+                  self.busy = false
+                  try? FileManager.default.removeItem(at: destination)
+                  MemorSpatialTrace.write("photo.anchor.failed", fields: ["id": id])
+                  promise.reject("ERR_SAVE_PHOTO", error.localizedDescription)
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        DispatchQueue.main.async {
+          self?.busy = false
+          MemorSpatialTrace.write("photo.jpeg.failed", fields: ["id": id])
+          promise.reject("ERR_PHOTO_FILE", error.localizedDescription)
         }
       }
     }
@@ -358,19 +589,29 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
       promise.reject("ERR_NOT_LOCALIZED", "Reconheça o lugar antes de posicionar a intervenção.")
       return
     }
+    MemorSpatialTrace.write("text.placement.started", fields: ["id": id])
     let point = CGPoint(x: scene.bounds.midX, y: scene.bounds.midY)
-    guard let hit = scene.hitTest(point, types: [.existingPlaneUsingExtent, .existingPlane]).first else {
+    guard let hit = scene.hitTest(
+      point, types: [.existingPlaneUsingGeometry, .existingPlaneUsingExtent, .featurePoint]
+    ).first else {
+      MemorSpatialTrace.write("text.placement.noSurface", fields: ["id": id])
       promise.reject("ERR_NO_SURFACE", "Aponte a mira para uma superfície reconhecida.")
       return
     }
-    let anchor = ARAnchor(name: "memor.text." + id.lowercased(), transform: hit.worldTransform)
+    let name = "memor.text." + id.lowercased()
+    let anchor = ARAnchor(name: name, transform: hit.worldTransform)
     busy = true
+    // Populate rendering metadata BEFORE ARKit calls the renderer delegate.
+    titles[name] = title
+    MemorSpatialTrace.write("text.anchor.adding", fields: ["id": id, "hitType": hit.type.rawValue])
     scene.session.add(anchor: anchor)
     scene.session.getCurrentWorldMap { [weak self] map, error in
       guard let self, let map else {
         DispatchQueue.main.async {
           self?.scene.session.remove(anchor: anchor)
+          self?.titles.removeValue(forKey: name)
           self?.busy = false
+          MemorSpatialTrace.write("text.snapshot.failed", fields: ["id": id])
           promise.reject("ERR_SNAPSHOT", error?.localizedDescription ?? "Falha ao salvar a posição da obra.")
         }
         return
@@ -399,13 +640,16 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
           ]
           DispatchQueue.main.async {
             self.busy = false
-            self.titles[anchor.name ?? ""] = title
+            self.refreshArtworkNodes()
+            MemorSpatialTrace.write("text.anchor.saved", fields: ["id": id, "mapBytes": data.count])
             promise.resolve(["id": id, "transform": matrix])
           }
         } catch {
           DispatchQueue.main.async {
             self.scene.session.remove(anchor: anchor)
+            self.titles.removeValue(forKey: name)
             self.busy = false
+            MemorSpatialTrace.write("text.anchor.failed", fields: ["id": id])
             promise.reject("ERR_PLACE_TEXT", error.localizedDescription)
           }
         }
@@ -414,14 +658,17 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
   }
 
   public func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-    guard let name = anchor.name, name.hasPrefix("memor.text."),
-          let title = titles[name] else { return SCNNode() }
-    let text = SCNText(string: title, extrusionDepth: 0.002)
-    text.font = UIFont.systemFont(ofSize: 0.14)
-    text.flatness = 0.01
-    text.firstMaterial?.diffuse.contents = UIColor.white
-    let node = SCNNode(geometry: text)
-    node.scale = SCNVector3(0.5, 0.5, 0.5)
-    return node
+    // SceneKit may ask for this node before RN has hydrated artwork metadata.
+    // Always return an empty container, then add content in didAdd/setMarkers.
+    return SCNNode()
+  }
+
+  public func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
+    guard let name = anchor.name, WorldMapAnchorPersistence.isInterventionAnchor(name) else { return }
+    DispatchQueue.main.async { [weak self, weak node] in
+      guard let self, let node else { return }
+      MemorSpatialTrace.write("render.anchor.attached", fields: ["anchor": name])
+      self.renderArtwork(name: name, on: node)
+    }
   }
 }
