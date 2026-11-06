@@ -45,5 +45,5 @@ test("successful VPS hosting does not require an ARPlane from the local heuristi
   assert.equal(scanIsReady(progress),false);
   assert.equal(evidence.quality,"vps-hosted");
   assert.equal(isCaptureEvidence(evidence),true);
-  assert.throws(()=>makeHostedCaptureEvidence({...progress,tracking:"limited"}),/VPS/);
+  assert.equal(makeHostedCaptureEvidence({...progress,tracking:"limited"}).quality,"vps-hosted");
 });

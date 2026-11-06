@@ -69,7 +69,8 @@ export function makeCaptureEvidence(progress: ScanProgress, now = new Date()): C
 
 /** Cloud VPS has its own native coverage gate, separate from plane/depth. */
 export function makeHostedCaptureEvidence(progress: ScanProgress, now = new Date()): CaptureEvidence {
-  if (progress.tracking !== "ready") throw new Error("Rastreamento VPS ainda não está normal.");
+  // Native finishScan success is authoritative; tracking can become limited
+  // while the upload finishes. Do not discard an already-hosted anchor.
   return {
     kind: "tracking-observation-v1",
     capturedAt: now.toISOString(),
