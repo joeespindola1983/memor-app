@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Memor QA",
+    "slug": "memor-app",
+    "scheme": "memorqa",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.espindola.memor.app.qa",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "O Memor usa a câmera para testar a criação e visualização de intervenções em realidade aumentada.",
+        "NSLocalNetworkUsageDescription": "O Memor QA precisa acessar o servidor de desenvolvimento Metro neste computador para executar os testes durante o desenvolvimento.",
+        "NSBonjourServices": [
+          "_expo._tcp"
+        ],
+        "NSLocationWhenInUseUsageDescription": "O Memor usa a localização, quando autorizada, para mostrar intervenções próximas e registrar lugares."
+      }
+    },
+    "android": {
+      "package": "com.espindola.memor.app.qa",
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      [
+        "@reactvision/react-viro",
+        {
+          "provider": "none",
+          "android": {
+            "xRMode": "AR"
+          },
+          "ios": {
+            "cameraUsagePermission": "O Memor usa a câmera para detectar superfícies e posicionar obras em realidade aumentada."
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O Memor usa a localização, quando autorizada, para mostrar intervenções próximas e registrar lugares."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
