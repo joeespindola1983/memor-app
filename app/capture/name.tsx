@@ -23,13 +23,14 @@ export default function NameCapturedPlace() {
   const { createPlace, hydrated, loadError } = usePlaces();
   const evidence = scanBridge.takePending();
   const hosted = scanBridge.takePendingAnchor();
+  const worldMap = scanBridge.takePendingWorldMap();
   const [name, setName] = useState("");
   const [coordinate, setCoordinate] = useState<SavedCoordinate | null>(null);
   const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState("");
 
-  if (!evidence) return <Redirect href="/capture" />;
+  if (!evidence && !worldMap) return <Redirect href="/capture" />;
 
   async function geotag() {
     setLocating(true);
@@ -51,11 +52,11 @@ export default function NameCapturedPlace() {
   }
 
   async function save() {
-    if (!evidence || saving || !cleanTitle(name)) return;
+    if ((!evidence && !worldMap) || saving || !cleanTitle(name)) return;
     setSaving(true);
     setProblem("");
     try {
-      const id = await createPlace(name, coordinate ?? undefined, evidence, hosted ?? undefined);
+      const id = await createPlace(name, coordinate ?? undefined, evidence ?? undefined, hosted ?? undefined, worldMap ?? undefined);
       scanBridge.clearPending();
       router.replace({ pathname: "/places/[id]", params: { id, justCaptured: "1" } });
     } catch (error) {
@@ -97,7 +98,9 @@ export default function NameCapturedPlace() {
           <View style={styles.confirmation}>
             <Text style={styles.confirmationMark}>✓</Text>
             <Text style={[editorial.muted, { flex: 1 }]}>
-              {hosted
+              {worldMap
+                ? "Mapa espacial salvo neste iPhone. Você poderá reconhecer este lugar novamente, mesmo offline."
+                : hosted
                 ? "Lugar guardado. Você poderá encontrá-lo de novo ao voltar aqui."
                 : "Lugar registrado neste aparelho. O posicionamento é temporário."}
             </Text>
@@ -127,7 +130,9 @@ export default function NameCapturedPlace() {
           onPress={() => void save()}
           disabled={!hydrated || !!loadError || saving || !cleanTitle(name)} />
         <Text style={[editorial.muted, { fontSize: 12 }]}>
-          {hosted
+          {worldMap
+            ? "O mapa permanece somente neste aparelho até você optar por sincronizar. Não foi publicado."
+            : hosted
             ? "Uma referência visual do ambiente foi enviada para permitir futuras visitas. Suas palavras não foram publicadas."
             : "Este cadastro foi salvo somente neste aparelho."}
         </Text>

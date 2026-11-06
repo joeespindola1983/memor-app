@@ -21,6 +21,7 @@ jobs:
       # First scaffold has no package-lock until the initial local install.
       - run: npm install --no-audit --no-fund
       - run: npm run deps:check
+      - run: npm run native:check
       - run: npm run test
       - run: npm run typecheck
       - run: npx expo install --check

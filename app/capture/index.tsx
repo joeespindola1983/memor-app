@@ -2,7 +2,9 @@ import { ViroARSceneNavigator } from "@reactvision/react-viro";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform } from "react-native";
+import { MemorWorldMapView, worldMapNative, type WorldMapStatus, type WorldMapViewHandle } from "../../modules/memor-world-map";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CaptureScene from "../../src/ar/CaptureScene";
 import { scanBridge, useScanProgress } from "../../src/ar/scanBridge";
@@ -21,6 +23,28 @@ const rvConfigured = Constants.expoConfig?.extra?.reactvisionConfigured === true
  * Native diagnostic metrics remain in the scan bridge, not the user interface.
  */
 export default function CapturePlaceScreen() {
+  if (Platform.OS === "ios") {
+    return MemorWorldMapView ? <NativeCapturePlaceScreen /> : <MissingWorldMapBuild />;
+  }
+  return <LegacyViroCapturePlaceScreen />;
+}
+
+function MissingWorldMapBuild() {
+  const router = useRouter();
+  return (
+    <View style={[styles.root, { padding: 24, justifyContent: "center", gap: 18 }]}>
+      <Text style={[styles.title, { color: tokens.white }]}>O motor espacial precisa ser instalado.</Text>
+      <Text style={{ color: tokens.white, lineHeight: 22 }}>
+        Este build do Memor ainda não inclui o módulo Swift MemorWorldMap.
+        Instale um novo build nativo iOS para capturar e revisitar mapas offline.
+        Nenhuma captura será substituída por uma sessão temporária.
+      </Text>
+      <MemorActionButton label="VOLTAR" onPress={() => router.replace("/(tabs)/archive")} />
+    </View>
+  );
+}
+
+function LegacyViroCapturePlaceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const initialScene = useMemo(() => ({ scene: CaptureScene }), []);
@@ -219,3 +243,111 @@ const styles = StyleSheet.create({
   steps: { flexDirection: "row", gap: 4, height: 4, marginVertical: 2 },
   step: { flex: 1 },
 });
+
+/** New iOS capture path: native ARKit archive, no ReactVision Spatial. */
+function NativeCapturePlaceScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const camera = useRef<WorldMapViewHandle>(null);
+  const [status, setStatus] = useState<WorldMapStatus | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const lastTracking = useRef("");
+
+  useEffect(() => {
+    scanBridge.start();
+    console.info("[Memor][RN] rn.capture.opened");
+    void worldMapNative?.logEvent("rn.capture.opened").catch(() => undefined);
+  }, []);
+
+  function onStatus(next: WorldMapStatus) {
+    setStatus(next);
+    const key = [next.tracking, next.mapping].join("/");
+    if (key !== lastTracking.current) {
+      lastTracking.current = key;
+      console.info("[Memor][RN] rn.capture.tracking", key);
+    }
+  }
+
+  const ready = status?.tracking === "ready" && status.mapping === "mapped";
+  async function exportLogs() {
+    try {
+      const history = await worldMapNative?.exportDiagnostics();
+      if (history) await Share.share({ message: history, title: "Memor - logs da captura" });
+      else setError("Ainda não há eventos de depuração.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Não foi possível exportar os logs.");
+    }
+  }
+  async function save() {
+    if (!camera.current || !ready || saving) return;
+    setSaving(true);
+    setError("");
+    console.info("[Memor][RN] rn.capture.save.started");
+    void worldMapNative?.logEvent("rn.capture.save.started").catch(() => undefined);
+    try {
+      const archive = await camera.current.saveMap();
+      scanBridge.markNativeWorldMap(archive);
+      console.info("[Memor][RN] rn.capture.save.succeeded", archive.id);
+      void worldMapNative?.logEvent("rn.capture.save.succeeded", archive.id).catch(() => undefined);
+      router.replace("/capture/name");
+    } catch (e) {
+      console.warn("[Memor][RN] rn.capture.save.failed", e);
+      void worldMapNative?.logEvent("rn.capture.save.failed").catch(() => undefined);
+      setError(e instanceof Error ? e.message : "Não foi possível salvar o lugar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const NativeView = MemorWorldMapView!;
+  return (
+    <View style={styles.root}>
+      <NativeView
+        ref={camera}
+        style={StyleSheet.absoluteFill}
+        onStatus={(event) => onStatus(event.nativeEvent)}
+      />
+      <View pointerEvents="none" style={styles.reticle}>
+        <Text style={styles.reticleText}>+</Text>
+      </View>
+      <View style={[styles.header, { top: insets.top + 10 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Fechar câmera"
+          onPress={() => router.replace("/(tabs)/archive")} style={styles.close}>
+          <Text style={styles.closeText}>×</Text>
+        </Pressable>
+        <View style={{ flex: 1, gap: 3 }}>
+          <PixelLabel color={tokens.ink}>MEMOR / CRIAR</PixelLabel>
+          <Text style={styles.headerTitle}>Novo lugar</Text>
+        </View>
+      </View>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+        <View style={styles.panel}>
+          <View style={styles.eyebrow}>
+            <View style={[styles.dot, { backgroundColor: ready ? tokens.image : tokens.poetry }]} />
+            <PixelLabel color={tokens.ink}>{ready ? "PRONTO PARA GUARDAR" : "OBSERVANDO O AMBIENTE"}</PixelLabel>
+          </View>
+          <Text style={styles.title}>{ready ? "Lugar mapeado." : "Explore este lugar."}</Text>
+          <Text style={editorial.muted}>
+            {ready
+              ? "O mapa espacial já pode ser guardado neste iPhone para visitas offline."
+              : "Mova-se devagar por diferentes ângulos até o ambiente ficar reconhecível."}
+          </Text>
+          <MemorActionButton label={saving ? "GUARDANDO..." : "GUARDAR LUGAR"}
+            onPress={() => void save()} disabled={!ready || saving} />
+          <Pressable accessibilityRole="button" onPress={() => void exportLogs()}
+            style={{ alignItems: "center", paddingVertical: 6 }}>
+            <Text style={{ fontSize: 11, color: tokens.muted, textDecorationLine: "underline" }}>
+              Exportar histórico de depuração
+            </Text>
+          </Pressable>
+          {error || status?.error ? (
+            <Text accessibilityRole="alert" style={[editorial.muted, { color: tokens.poetry }]}>
+              {error || status?.error}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+}

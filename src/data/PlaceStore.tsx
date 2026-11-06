@@ -3,6 +3,12 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { isValidCoordinate, type SavedCoordinate } from "../domain/discovery";
 import { isCaptureEvidence, type CaptureEvidence } from "../domain/capture";
 import { isHostedVPSAnchor, type HostedVPSAnchor } from "../domain/cloudAnchor";
+import { worldMapNative, type WorldMapFile } from "../../modules/memor-world-map";
+
+function traceLocal(event: string, id: string) {
+  console.info("[Memor][RN]", event, id);
+  void worldMapNative?.logEvent(event, id).catch(() => undefined);
+}
 import {
   isPlace, makeArtwork, makePlace, updateArtworkDraft, removeArtworkDraft,
   type ArtworkDraft, type ArtworkKind,
@@ -14,11 +20,12 @@ type PlaceStoreValue = {
   places: LabPlace[];
   hydrated: boolean;
   loadError: string | null;
-  createPlace(title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor): Promise<string>;
+  createPlace(title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor, worldMap?: WorldMapFile): Promise<string>;
+  updateWorldMap(placeId: string, worldMap: WorldMapFile): Promise<void>;
   updateCoordinate(placeId: string, coordinate: SavedCoordinate): Promise<void>;
   updateArtwork(placeId: string, artworkId: string, title: string, position?: Vec3, locationPosition?: Vec3): Promise<ArtworkDraft>;
   deleteArtwork(placeId: string, artworkId: string): Promise<void>;
-  addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3): Promise<ArtworkDraft>;
+  addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3, artworkID?: string, photoUri?: string): Promise<ArtworkDraft>;
   deletePlace(placeId: string): Promise<void>;
 };
 const Context = createContext<PlaceStoreValue | null>(null);
@@ -64,17 +71,21 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const createPlace = async (title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor) => {
+  const createPlace = async (title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor, worldMap?: WorldMapFile) => {
     if (!hydrated) throw new Error("Aguarde o carregamento do arquivo local.");
     if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
     if (capture && !isCaptureEvidence(capture)) throw new Error("Registro espacial de captura inválido.");
     if (cloudAnchor && !isHostedVPSAnchor(cloudAnchor)) throw new Error("Âncora VPS inválida.");
-    const created = makePlace(title, new Date(), coordinate, capture, cloudAnchor);
+    if (worldMap && (worldMap.provider !== "arkit-worldmap" || worldMap.version !== 1 || !worldMap.uri.startsWith("file://"))) {
+      throw new Error("Arquivo ARKit inválido.");
+    }
+    const created = makePlace(title, new Date(), coordinate, capture, cloudAnchor, worldMap);
     await save([created, ...current.current]);
+    traceLocal("rn.place.created", created.id);
     return created.id;
   };
 
-  const addArtwork = async (placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3) => {
+  const addArtwork = async (placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3, artworkID?: string, photoUri?: string) => {
     const place = current.current.find((item) => item.id === placeId);
     if (!place) throw new Error("Este lugar não está mais salvo.");
     if (place.cloudAnchor && !locationPosition) {
@@ -82,13 +93,14 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     }
     if (!place.cloudAnchor && locationPosition) throw new Error("Este lugar não possui âncora VPS.");
     const art = makeArtwork(kind, title, position, new Date(), place.cloudAnchor && locationPosition
-      ? { position: locationPosition, anchorId: place.cloudAnchor.cloudAnchorId } : undefined);
+      ? { position: locationPosition, anchorId: place.cloudAnchor.cloudAnchorId } : undefined, artworkID, photoUri);
     const next = current.current.map((place) =>
       place.id === placeId
         ? { ...place, artworks: [...place.artworks, art], updatedAt: art.createdAt }
         : place
     );
     await save(next);
+    traceLocal("rn.artwork.metadata.saved", art.id);
     return art;
   };
 
@@ -122,11 +134,22 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
       ? { ...place, coordinate, updatedAt: new Date().toISOString() } : place));
   };
 
+  const updateWorldMap = async (placeId: string, worldMap: WorldMapFile) => {
+    const place = current.current.find(p => p.id === placeId);
+    if (!place?.worldMap || place.worldMap.id !== worldMap.id || worldMap.byteCount <= 0) {
+      throw new Error("Referência espacial inválida.");
+    }
+    await save(current.current.map(p => p.id === placeId ? {
+      ...p, worldMap, updatedAt: new Date().toISOString(),
+    } : p));
+    traceLocal("rn.map.metadata.updated", worldMap.id);
+  };
+
   const deletePlace = async (placeId: string) =>
     save(current.current.filter((place) => place.id !== placeId));
 
   return (
-    <Context.Provider value={{ places, hydrated, loadError, createPlace, updateCoordinate, addArtwork, updateArtwork, deleteArtwork, deletePlace }}>
+    <Context.Provider value={{ places, hydrated, loadError, createPlace, updateWorldMap, updateCoordinate, addArtwork, updateArtwork, deleteArtwork, deletePlace }}>
       {children}
     </Context.Provider>
   );

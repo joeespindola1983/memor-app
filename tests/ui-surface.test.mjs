@@ -4,29 +4,36 @@ import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
 
-test("user-facing capture hides spatial diagnostics but still hosts a VPS scan", () => {
+test("iOS capture uses the local ARKit map engine behind the RN interface", () => {
   const code = read("app/capture/index.tsx");
-  assert.match(code, /scanBridge\.startVPS\(\)/);
-  assert.match(code, /scanBridge\.finishVPS\(TTL_DAYS\)/);
-  assert.match(code, /makeHostedVPSAnchor/);
+  const config = read("app.config.ts");
+  assert.match(code, /if \(Platform\.OS === "ios"\)/);
+  assert.match(code, /return MemorWorldMapView \? <NativeCapturePlaceScreen/);
+  assert.match(code, /await camera\.current\.saveMap\(\)/);
+  assert.match(code, /scanBridge\.markNativeWorldMap\(archive\)/);
   assert.match(code, /GUARDAR LUGAR/);
+  assert.match(config, /reactvisionConfigured: false/);
   assert.doesNotMatch(code, /PLANOS.*TRACK|MAPA VPS HOSPEDADO|PONTOS 3D|HOSPEDAR VPS/);
 });
 
-test("revisiting a place still resolves and stores art in the VPS location frame", () => {
-  const code = read("app/experience/[id].tsx");
-  assert.match(code, /ViroARSceneNavigator/);
-  assert.match(code, /worldToLocation\(matrix, worldPosition\)/);
-  assert.match(code, /addArtwork\(place\.id, "text", label, placement\.position, locationPosition\)/);
-  assert.match(code, /visibleArtworks/);
-  assert.doesNotMatch(code, /DIREÇÃO DA CÂMERA|PROFUNDIDADE:|ÚLTIMO TESTE|LABORATÓRIO RA/);
+test("RN revisits saved ARWorldMaps, adds text and expands an existing map", () => {
+  const screen = read("app/experience/[id].tsx");
+  const native = read("src/components/WorldMapExperience.tsx");
+  assert.match(screen, /nativePlace\?\.worldMap/);
+  assert.match(screen, /<WorldMapExperience place=\{nativePlace\}/);
+  assert.match(native, /native\.current\.placeText/);
+  assert.match(native, /v => v\.beginExpansion\(\)/);
+  assert.match(native, /v => v\.saveExpansion\(\)/);
+  assert.match(native, /v => v\.restoreMap\(true\)/);
 });
 
-test("naming has no native AR scene and retains hosted anchor", () => {
+test("naming releases camera, persists local map metadata and supports legacy records", () => {
   const code = read("app/capture/name.tsx");
-  assert.doesNotMatch(code, /ViroARSceneNavigator/);
+  assert.doesNotMatch(code, /ViroARSceneNavigator|<MemorWorldMapView/);
+  assert.match(code, /takePendingWorldMap\(\)/);
   assert.match(code, /takePendingAnchor\(\)/);
-  assert.match(code, /createPlace\(name, coordinate \?\? undefined, evidence, hosted \?\? undefined\)/);
+  assert.match(code, /worldMap \?\? undefined/);
+  assert.match(code, /createPlace\(name/);
 });
 
 test("archive and global header do not display QA status", () => {

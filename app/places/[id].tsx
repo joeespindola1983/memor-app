@@ -1,12 +1,13 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Screen } from "../../src/components/Screen";
 import { PixelLabel } from "../../src/components/PixelLabel";
 import { usePlaces } from "../../src/data/PlaceStore";
 import { useEditorialDrafts } from "../../src/data/EditorialDraftStore";
 import { MemorActionButton, editorial } from "../../src/components/MemorUI";
 import { isAnchorExpired } from "../../src/domain/cloudAnchor";
+import { worldMapNative } from "../../modules/memor-world-map";
 import { tokens } from "../../src/theme/tokens";
 
 /** Editorial place page — Figma 03.06 / Lugar salvo (109:1768)
@@ -21,12 +22,18 @@ export default function PlaceDetails() {
   const place = places.find(p => p.id === id);
 
   function remove() {
-    Alert.alert("Excluir este lugar?", "As intervenções serão removidas deste aparelho. A referência espacial hospedada poderá continuar disponível até expirar.", [
+    if (!place) return;
+    const worldMapID = place.worldMap?.id;
+    Alert.alert("Excluir este lugar?", "Este lugar e suas intervenções serão removidos deste aparelho. Se estiver publicado, sua exclusão remota deverá ser sincronizada separadamente.", [
       { text: "Cancelar", style: "cancel" },
       { text: "Excluir do aparelho", style: "destructive", onPress: async () => {
         setRemoving(true);
         try {
           await deletePlace(String(id));
+          if (worldMapID) {
+            try { await worldMapNative?.removeMap(worldMapID); }
+            catch (error) { if (__DEV__) console.warn("[Memor] Native map cleanup", error); }
+          }
           try {
             await removePlaceDrafts(String(id));
           } catch (error) {
@@ -51,7 +58,7 @@ export default function PlaceDetails() {
   }
 
   const expired = !!place.cloudAnchor && isAnchorExpired(place.cloudAnchor);
-  const revisitable = !!place.cloudAnchor && !expired;
+  const revisitable = !!place.worldMap || (!!place.cloudAnchor && !expired);
   const count = place.artworks.length;
 
   return (
@@ -113,10 +120,12 @@ export default function PlaceDetails() {
               <View style={[styles.typeMark, {
                 backgroundColor: art.kind === "text" ? tokens.poetry : tokens.image,
               }]}>
-                <Text style={styles.typeIcon}>{art.kind === "text" ? "T" : "▧"}</Text>
+                {art.kind === "photo" && art.photoUri
+                  ? <Image source={{ uri: art.photoUri }} style={{ width: 44, height: 44 }} />
+                  : <Text style={styles.typeIcon}>{art.kind === "text" ? "T" : "▧"}</Text>}
               </View>
               <View style={{ flex: 1, gap: 5 }}>
-                <PixelLabel>{art.kind === "text" ? "TEXTO" : "CARTÃO"} · {String(index + 1).padStart(2, "0")}</PixelLabel>
+                <PixelLabel>{art.kind === "text" ? "TEXTO" : art.kind === "photo" ? "FOTO" : "CARTÃO"} · {String(index + 1).padStart(2, "0")}</PixelLabel>
                 <Text numberOfLines={2} style={styles.workTitle}>{art.title}</Text>
               </View>
               <Text style={styles.chevron}>›</Text>

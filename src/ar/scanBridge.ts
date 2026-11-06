@@ -6,6 +6,7 @@ import {
 import { isVec3 } from "./hitTest";
 import type { Vec3 } from "../domain/models";
 import type { HostedVPSAnchor, NativeScanStatus } from "../domain/cloudAnchor";
+import type { WorldMapFile } from "../../modules/memor-world-map";
 
 let status: ScanProgress = initialScan;
 let lastCamera: Vec3 | null = null;
@@ -17,6 +18,7 @@ const anchors = new Set<string>();
 const listeners = new Set<() => void>();
 let pendingCapture: CaptureEvidence | null = null;
 let pendingAnchor: HostedVPSAnchor | null = null;
+let pendingWorldMap: WorldMapFile | null = null;
 
 /** Exact subset of the ViroARSceneNavigator scene-injected API (3.0.3).
  * Calls must use the navigator supplied to CaptureScene, NOT a ViroARScene ref.
@@ -63,6 +65,7 @@ export const scanBridge = {
     anchors.clear();
     pendingCapture = null;
     pendingAnchor = null;
+    pendingWorldMap = null;
     emit({ ...initialScan });
     return runID;
   },
@@ -145,7 +148,14 @@ export const scanBridge = {
   },
   takePending(): CaptureEvidence | null { return pendingCapture; },
   takePendingAnchor(): HostedVPSAnchor | null { return pendingAnchor; },
-  clearPending() { pendingCapture = null; pendingAnchor = null; },
+  markNativeWorldMap(map: WorldMapFile) {
+    if (map.provider !== "arkit-worldmap" || !map.uri.startsWith("file://")) throw new Error("Mapa nativo inválido.");
+    pendingWorldMap = map;
+    pendingCapture = null;
+    pendingAnchor = null;
+  },
+  takePendingWorldMap(): WorldMapFile | null { return pendingWorldMap; },
+  clearPending() { pendingCapture = null; pendingAnchor = null; pendingWorldMap = null; },
 };
 
 export function useScanProgress() {

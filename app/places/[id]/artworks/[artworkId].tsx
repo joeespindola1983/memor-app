@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { MemorActionButton, MemorBack, editorial } from "../../../../src/components/MemorUI";
 import { PixelLabel } from "../../../../src/components/PixelLabel";
 import { usePlaces } from "../../../../src/data/PlaceStore";
@@ -60,7 +60,12 @@ export default function EditArtwork() {
           <>
             <PixelLabel>MEMOR / EDITAR INTERVENÇÃO</PixelLabel>
             <Text style={[editorial.heading,{fontSize:34}]}>Sua memória,{"\n"}suas palavras.</Text>
-            <PixelLabel>{artwork.kind==="text"?"TEXTO":"CARTÃO"} · {place.title}</PixelLabel>
+            <PixelLabel>{artwork.kind==="text"?"TEXTO":artwork.kind==="photo"?"FOTO":"CARTÃO"} · {place.title}</PixelLabel>
+            {artwork.kind === "photo" && artwork.photoUri ? (
+              <Image source={{ uri: artwork.photoUri }}
+                style={{ width: "100%", height: 250, backgroundColor: tokens.ink }}
+                resizeMode="contain" />
+            ) : null}
             <TextInput value={name} onChangeText={setName} testID="edit-artwork-title-input"
               maxLength={72} multiline textAlignVertical="top" autoCapitalize="sentences"
               placeholder="Texto da intervenção" placeholderTextColor={tokens.muted}
