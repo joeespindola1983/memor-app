@@ -25,7 +25,7 @@ type PlaceStoreValue = {
   updateCoordinate(placeId: string, coordinate: SavedCoordinate): Promise<void>;
   updateArtwork(placeId: string, artworkId: string, title: string, position?: Vec3, locationPosition?: Vec3): Promise<ArtworkDraft>;
   deleteArtwork(placeId: string, artworkId: string): Promise<void>;
-  addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3, artworkID?: string): Promise<ArtworkDraft>;
+  addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3, artworkID?: string, photoUri?: string): Promise<ArtworkDraft>;
   deletePlace(placeId: string): Promise<void>;
 };
 const Context = createContext<PlaceStoreValue | null>(null);
@@ -85,7 +85,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     return created.id;
   };
 
-  const addArtwork = async (placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3, artworkID?: string) => {
+  const addArtwork = async (placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3, artworkID?: string, photoUri?: string) => {
     const place = current.current.find((item) => item.id === placeId);
     if (!place) throw new Error("Este lugar não está mais salvo.");
     if (place.cloudAnchor && !locationPosition) {
@@ -93,7 +93,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     }
     if (!place.cloudAnchor && locationPosition) throw new Error("Este lugar não possui âncora VPS.");
     const art = makeArtwork(kind, title, position, new Date(), place.cloudAnchor && locationPosition
-      ? { position: locationPosition, anchorId: place.cloudAnchor.cloudAnchorId } : undefined, artworkID);
+      ? { position: locationPosition, anchorId: place.cloudAnchor.cloudAnchorId } : undefined, artworkID, photoUri);
     const next = current.current.map((place) =>
       place.id === placeId
         ? { ...place, artworks: [...place.artworks, art], updatedAt: art.createdAt }
