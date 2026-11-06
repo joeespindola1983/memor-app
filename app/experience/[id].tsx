@@ -45,6 +45,15 @@ export default function ARExperience() {
   const [movingID, setMovingID] = useState<string | null>(null);
 
   useEffect(() => {
+    console.info("[Memor VPS] Opening AR place", {
+      providerConfigured: rvConfigured,
+      placeHasHostedAnchor: hasCloudAnchor,
+      anchoredArtworkCount: anchoredArtworks.length,
+      localArtworkCount: place?.artworks.length ?? 0,
+    });
+  }, [rvConfigured, hasCloudAnchor, place?.id, anchoredArtworks.length, place?.artworks.length]);
+
+  useEffect(() => {
     if (id) arSession.start(String(id));
     return () => arSession.clear();
   }, [id]);

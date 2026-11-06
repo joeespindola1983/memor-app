@@ -28,6 +28,15 @@ export default function CapturePlaceScreen() {
   const mounted = useRef(true);
 
   useEffect(() => {
+    console.info("[Memor VPS] Capture configuration", {
+      configured: rvConfigured,
+      projectId: Constants.expoConfig?.extra?.reactvisionProjectId ?? "unknown",
+      configState: Constants.expoConfig?.extra?.reactvisionConfigState ?? "missing",
+      // Never log the client key.
+    });
+  }, []);
+
+  useEffect(() => {
     mounted.current = true;
     scanBridge.start();
     return () => {
@@ -170,8 +179,7 @@ export default function CapturePlaceScreen() {
           ) : (
             <>
               <Text style={[editorial.muted,{fontSize:12}]}>
-                ReactVision não configurado neste build: informe REACTVISION_CLIENT_KEY e
-                REACTVISION_PROJECT_ID em .env e recompile. Sem isso, apenas dados locais.
+                VPS DESATIVADO NESTE BUILD. A câmera está funcionando apenas em modo local.\n                Execute npm run vps:doctor, confirme a chave pública e recompile.\n                Sem VPS, as obras NÃO reaparecerão quando você voltar.
               </Text>
               <Text style={[editorial.muted,{fontSize:12}]}>{scanInstruction(progress)}</Text>
               <MemorActionButton label="SALVAR OBSERVAÇÃO LOCAL" onPress={finishLocal}
