@@ -31,6 +31,25 @@ public final class MemorWorldMapModule: Module {
       AsyncFunction("placeText") { (view: MemorWorldMapView, id: String, title: String, promise: Promise) in
         view.placeText(id: id, title: title, promise: promise)
       }
+      AsyncFunction("pauseForPhoto") { (view: MemorWorldMapView, promise: Promise) in
+        view.pauseForPhoto(promise: promise)
+      }
+      AsyncFunction("resumeAfterPhoto") { (view: MemorWorldMapView, promise: Promise) in
+        view.resumeAfterPhoto(promise: promise)
+      }
+      AsyncFunction("placePhoto") { (view: MemorWorldMapView, id: String, caption: String, sourceURI: String, promise: Promise) in
+        view.placePhoto(id: id, caption: caption, sourceURI: sourceURI, promise: promise)
+      }
+    }
+
+    AsyncFunction("exportDiagnostics") { () -> String in
+      MemorSpatialTrace.export()
+    }
+
+    AsyncFunction("logEvent") { (event: String, recordID: String?) in
+      // Only event names and opaque UUIDs are allowed across this boundary.
+      guard event.range(of: #"^[a-zA-Z0-9._-]{1,72}$"#, options: .regularExpression) != nil else { return }
+      MemorSpatialTrace.write(event, fields: ["id": recordID ?? ""])
     }
 
     AsyncFunction("removeMap") { (id: String, promise: Promise) in

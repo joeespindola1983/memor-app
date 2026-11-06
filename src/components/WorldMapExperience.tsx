@@ -1,9 +1,11 @@
 import { useRouter } from "expo-router";
 import { useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Image, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  MemorWorldMapView, type WorldMapStatus, type WorldMapViewHandle,
+  MemorWorldMapView, worldMapNative,
+  type WorldMapFile, type WorldMapStatus, type WorldMapViewHandle,
 } from "../../modules/memor-world-map";
 import type { LabPlace, Vec3 } from "../domain/models";
 import { usePlaces } from "../data/PlaceStore";
@@ -29,9 +31,27 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState("");
   const [note, setNote] = useState("");
+  const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
+  const lastStatus = useRef("");
   const markersJSON = useMemo(() => JSON.stringify(
-    place.artworks.filter(a => a.kind === "text").map(a => ({ id: a.id, title: a.title }))
+    place.artworks.filter(a => a.kind === "text" || a.kind === "photo").map(a => ({
+      id: a.id, title: a.title, kind: a.kind
+    }))
   ), [place.artworks]);
+
+  function trace(event: string, recordID = place.id) {
+    console.info("[Memor][RN]", event, recordID);
+    void worldMapNative?.logEvent(event, recordID).catch(() => undefined);
+  }
+
+  function receiveStatus(next: WorldMapStatus) {
+    setState(next);
+    const key = [next.tracking, next.mapping, next.localized, next.expanding].join("/");
+    if (key !== lastStatus.current) {
+      lastStatus.current = key;
+      trace("rn.tracking.changed", next.mapId ?? place.id);
+    }
+  }
   const NativeView = MemorWorldMapView;
   if (!NativeView || !place.worldMap) return null;
 
@@ -39,8 +59,9 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
     if (!native.current || !state?.localized || busy || !content.trim()) return;
     setBusy(true);
     setProblem("");
+    const id = newAnchorID();
+    trace("rn.text.started", id);
     try {
-      const id = newAnchorID();
       const { transform } = await native.current.placeText(id, content.trim());
       if (transform.length !== 16 || !transform.every(Number.isFinite)) {
         throw new Error("A posição da intervenção é inválida.");
@@ -48,24 +69,109 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
       const position: Vec3 = [transform[12], transform[13], transform[14]];
       await addArtwork(place.id, "text", content.trim(), position, undefined, id);
       setContent("");
-      setNote("Intervenção salva neste lugar.");
+      trace("rn.text.saved", id);
+      setNote("Texto fixado no lugar. Aponte para a posição escolhida.");
     } catch (error) {
+      trace("rn.text.failed", id);
       setProblem(error instanceof Error ? error.message : "Não foi possível salvar a intervenção.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function action(fn: (view: WorldMapViewHandle) => Promise<void | { id: string; uri: string; byteCount: number; provider: "arkit-worldmap"; version: 1; createdAt: string }>, message: string) {
+  async function capturePhoto() {
+    if (!native.current || busy || pendingPhoto) return;
+    setProblem("");
+    setNote("");
+    trace("rn.photo.permission.requested");
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        trace("rn.photo.permission.denied");
+        setProblem("Autorize o acesso à câmera nas configurações para fotografar.");
+        return;
+      }
+      setBusy(true);
+      trace("rn.photo.camera.opening");
+      await native.current.pauseForPhoto();
+      try {
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          allowsEditing: false,
+          quality: 0.82,
+          exif: false,
+        });
+        if (result.canceled || !result.assets[0]?.uri) {
+          trace("rn.photo.camera.canceled");
+        } else {
+          setPendingPhoto(result.assets[0].uri);
+          trace("rn.photo.camera.captured");
+          setNote("Foto capturada. Reconheça novamente o local para fixá-la na mira.");
+        }
+      } finally {
+        await native.current.resumeAfterPhoto();
+        trace("rn.photo.camera.resumed");
+      }
+    } catch (error) {
+      trace("rn.photo.camera.failed");
+      setProblem(error instanceof Error ? error.message : "Não foi possível abrir a câmera.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function placePhoto() {
+    if (!native.current || !state?.localized || !pendingPhoto || busy) return;
+    setBusy(true);
+    setProblem("");
+    const id = newAnchorID();
+    trace("rn.photo.placement.started", id);
+    try {
+      const result = await native.current.placePhoto(id, content.trim() || "Fotografia", pendingPhoto);
+      if (result.transform.length !== 16 || !result.transform.every(Number.isFinite)) {
+        throw new Error("Transformação espacial inválida.");
+      }
+      const position: Vec3 = [result.transform[12], result.transform[13], result.transform[14]];
+      await addArtwork(place.id, "photo", content.trim() || "Fotografia", position, undefined, id, result.photoUri);
+      setPendingPhoto(null);
+      setContent("");
+      setNote("Foto fixada no lugar e guardada no aparelho.");
+      trace("rn.photo.placement.saved", id);
+    } catch (error) {
+      trace("rn.photo.placement.failed", id);
+      setProblem(error instanceof Error ? error.message : "Não foi possível fixar a foto.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function exportLogs() {
+    try {
+      const history = await worldMapNative?.exportDiagnostics();
+      trace("rn.trace.export.requested");
+      if (!history) {
+        setProblem("Ainda não existem registros espaciais neste aparelho.");
+        return;
+      }
+      await Share.share({ message: history, title: "Memor - histórico espacial de QA" });
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "Não foi possível exportar os registros.");
+    }
+  }
+
+  async function action(fn: (view: WorldMapViewHandle) => Promise<void | WorldMapFile>, message: string) {
     if (!native.current || busy) return;
     setBusy(true);
     setProblem("");
     setNote("");
+    trace("rn.map.action.started");
     try {
       const result = await fn(native.current);
       if (result && "uri" in result) await updateWorldMap(place.id, result);
       setNote(message);
+      trace("rn.map.action.succeeded");
     } catch (error) {
+      trace("rn.map.action.failed");
       setProblem(error instanceof Error ? error.message : "Não foi possível concluir esta operação.");
     } finally {
       setBusy(false);
@@ -83,7 +189,7 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
         mapId={place.worldMap.id}
         markersJSON={markersJSON}
         style={StyleSheet.absoluteFill}
-        onStatus={(e) => setState(e.nativeEvent)}
+        onStatus={(e) => receiveStatus(e.nativeEvent)}
       />
       <View pointerEvents="none" style={styles.reticle}>
         <Text style={styles.reticleText}>+</Text>
@@ -135,9 +241,29 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
                     value={content}
                     onChangeText={setContent}
                   />
-                  <MemorActionButton label={busy ? "SALVANDO..." : "DEIXAR TEXTO AQUI"}
-                    disabled={busy || !content.trim()} onPress={() => void addText()} />
-                  <Pressable disabled={!canExpand || busy}
+                  {pendingPhoto ? (
+                    <>
+                      <Image source={{ uri: pendingPhoto }} style={styles.photoPreview} resizeMode="contain" />
+                      <MemorActionButton label={busy ? "SALVANDO..." : "FIXAR FOTO NA MIRA"}
+                        disabled={busy || !state.localized}
+                        onPress={() => void placePhoto()} />
+                      <Pressable disabled={busy} onPress={() => {
+                        setPendingPhoto(null);
+                        trace("rn.photo.pending.discarded");
+                      }}>
+                        <Text style={styles.minor}>Descartar foto</Text>
+                      </Pressable>
+                    </>
+                  ) : (
+                    <>
+                      <MemorActionButton label={busy ? "SALVANDO..." : "DEIXAR TEXTO AQUI"}
+                        disabled={busy || !content.trim()} onPress={() => void addText()} />
+                      <Pressable disabled={busy} onPress={() => void capturePhoto()}>
+                        <Text style={styles.secondary}>+ Capturar foto</Text>
+                      </Pressable>
+                    </>
+                  )}
+                  <Pressable disabled={!canExpand || busy || !!pendingPhoto}
                     onPress={() => void action(v => v.beginExpansion(), "Explore novas partes do cenário.")}>
                     <Text style={styles.secondary}>+ Ampliar mapeamento</Text>
                   </Pressable>
@@ -156,6 +282,9 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
           {problem || state?.error ? (
             <Text accessibilityRole="alert" style={styles.error}>{problem || state?.error}</Text>
           ) : note ? <Text style={editorial.muted}>{note}</Text> : null}
+          <Pressable accessibilityRole="button" onPress={() => void exportLogs()} style={styles.logAction}>
+            <Text style={styles.logText}>Exportar histórico de depuração</Text>
+          </Pressable>
         </View>
       </View>
     </View>
@@ -164,7 +293,7 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.ink },
-  reticle: { position: "absolute", left: 0, right: 0, top: "45%", alignItems: "center" },
+  reticle: { position: "absolute", left: 0, right: 0, top: "50%", alignItems: "center" },
   reticleText: { color: tokens.image, fontSize: 32 },
   header: {
     position: "absolute", left: 12, right: 12,
@@ -194,4 +323,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: tokens.line, paddingHorizontal: 14,
   },
   error: { fontSize: 13, color: tokens.poetry },
+  photoPreview: { width: "100%", height: 125, backgroundColor: tokens.ink },
+  logAction: { alignItems: "center", paddingVertical: 8 },
+  logText: { color: tokens.muted, fontSize: 11, textDecorationLine: "underline" },
 });

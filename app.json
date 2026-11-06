@@ -52,6 +52,14 @@
         {
           "locationWhenInUsePermission": "O Memor usa a localização, quando autorizada, para mostrar intervenções próximas e registrar lugares."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O Memor utiliza a câmera para capturar fotografias que serão fixadas nas intervenções.",
+          "photosPermission": "O Memor acessa fotos escolhidas por você para anexar às intervenções.",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

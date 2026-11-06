@@ -3,7 +3,7 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform } from "react-native";
-import { MemorWorldMapView, type WorldMapStatus, type WorldMapViewHandle } from "../../modules/memor-world-map";
+import { MemorWorldMapView, worldMapNative, type WorldMapStatus, type WorldMapViewHandle } from "../../modules/memor-world-map";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CaptureScene from "../../src/ar/CaptureScene";
@@ -252,19 +252,39 @@ function NativeCapturePlaceScreen() {
   const [status, setStatus] = useState<WorldMapStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const lastTracking = useRef("");
 
-  useEffect(() => { scanBridge.start(); }, []);
+  useEffect(() => {
+    scanBridge.start();
+    console.info("[Memor][RN] rn.capture.opened");
+    void worldMapNative?.logEvent("rn.capture.opened").catch(() => undefined);
+  }, []);
+
+  function onStatus(next: WorldMapStatus) {
+    setStatus(next);
+    const key = [next.tracking, next.mapping].join("/");
+    if (key !== lastTracking.current) {
+      lastTracking.current = key;
+      console.info("[Memor][RN] rn.capture.tracking", key);
+    }
+  }
 
   const ready = status?.tracking === "ready" && status.mapping === "mapped";
   async function save() {
     if (!camera.current || !ready || saving) return;
     setSaving(true);
     setError("");
+    console.info("[Memor][RN] rn.capture.save.started");
+    void worldMapNative?.logEvent("rn.capture.save.started").catch(() => undefined);
     try {
       const archive = await camera.current.saveMap();
       scanBridge.markNativeWorldMap(archive);
+      console.info("[Memor][RN] rn.capture.save.succeeded", archive.id);
+      void worldMapNative?.logEvent("rn.capture.save.succeeded", archive.id).catch(() => undefined);
       router.replace("/capture/name");
     } catch (e) {
+      console.warn("[Memor][RN] rn.capture.save.failed", e);
+      void worldMapNative?.logEvent("rn.capture.save.failed").catch(() => undefined);
       setError(e instanceof Error ? e.message : "Não foi possível salvar o lugar.");
     } finally {
       setSaving(false);
@@ -277,7 +297,7 @@ function NativeCapturePlaceScreen() {
       <NativeView
         ref={camera}
         style={StyleSheet.absoluteFill}
-        onStatus={(event) => setStatus(event.nativeEvent)}
+        onStatus={(event) => onStatus(event.nativeEvent)}
       />
       <View pointerEvents="none" style={styles.reticle}>
         <Text style={styles.reticleText}>+</Text>

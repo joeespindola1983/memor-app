@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Screen } from "../../src/components/Screen";
 import { PixelLabel } from "../../src/components/PixelLabel";
 import { usePlaces } from "../../src/data/PlaceStore";
@@ -120,10 +120,12 @@ export default function PlaceDetails() {
               <View style={[styles.typeMark, {
                 backgroundColor: art.kind === "text" ? tokens.poetry : tokens.image,
               }]}>
-                <Text style={styles.typeIcon}>{art.kind === "text" ? "T" : "▧"}</Text>
+                {art.kind === "photo" && art.photoUri
+                  ? <Image source={{ uri: art.photoUri }} style={{ width: 44, height: 44 }} />
+                  : <Text style={styles.typeIcon}>{art.kind === "text" ? "T" : "▧"}</Text>}
               </View>
               <View style={{ flex: 1, gap: 5 }}>
-                <PixelLabel>{art.kind === "text" ? "TEXTO" : "CARTÃO"} · {String(index + 1).padStart(2, "0")}</PixelLabel>
+                <PixelLabel>{art.kind === "text" ? "TEXTO" : art.kind === "photo" ? "FOTO" : "CARTÃO"} · {String(index + 1).padStart(2, "0")}</PixelLabel>
                 <Text numberOfLines={2} style={styles.workTitle}>{art.title}</Text>
               </View>
               <Text style={styles.chevron}>›</Text>

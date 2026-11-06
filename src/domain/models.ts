@@ -15,7 +15,7 @@ function isValidCoordinate(value: unknown): value is SavedCoordinate {
 }
 
 export type Vec3 = [number, number, number];
-export type ArtworkKind = "text" | "card";
+export type ArtworkKind = "text" | "card" | "photo";
 
 export interface ArtworkDraft {
   id: string;
@@ -26,6 +26,8 @@ export interface ArtworkDraft {
   /** Position relative to the resolved ReactVision location frame (persistent). */
   locationPosition?: Vec3;
   locationAnchorId?: string;
+  /** Private on-device media; never a temporary ImagePicker cache URI. */
+  photoUri?: string;
   createdAt: string;
 }
 
@@ -74,13 +76,19 @@ export function makePlace(title: string, now = new Date(), coordinate?: SavedCoo
 export function makeArtwork(
   kind: ArtworkKind, title: string, position: Vec3, now = new Date(),
   location?: { position: Vec3; anchorId: string }, artworkID?: string,
+  photoUri?: string,
 ): ArtworkDraft {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Dê um nome à intervenção.");
   if (!isVec3(position)) throw new Error("Posição espacial inválida.");
   if (location && (!isVec3(location.position) || !location.anchorId)) throw new Error("Posição ancorada inválida.");
+  if (photoUri !== undefined && (kind !== "photo" || !photoUri.startsWith("file://"))) {
+    throw new Error("Imagem local inválida.");
+  }
+  if (kind === "photo" && !photoUri) throw new Error("Fotografia não encontrada.");
   return { id: artworkID ?? qaId(), kind, title: normalized, sessionPosition: [...position], createdAt: now.toISOString(),
     ...(location ? { locationPosition: [...location.position] as Vec3, locationAnchorId: location.anchorId } : {}),
+    ...(photoUri ? { photoUri } : {}),
   };
 }
 
@@ -144,7 +152,10 @@ export function isPlace(value: unknown): value is LabPlace {
     )) &&
     place.artworks.every((item) =>
       item && typeof item.id === "string" && typeof item.title === "string" &&
-      (item.kind === "text" || item.kind === "card") && isVec3(item.sessionPosition) &&
+      (item.kind === "text" || item.kind === "card" || item.kind === "photo") && isVec3(item.sessionPosition) &&
+      (item.photoUri === undefined || (item.kind === "photo" &&
+        typeof item.photoUri === "string" && item.photoUri.startsWith("file://"))) &&
+      (item.kind !== "photo" || typeof item.photoUri === "string") &&
       (item.locationPosition === undefined || (
         isVec3(item.locationPosition) &&
         typeof item.locationAnchorId === "string" &&

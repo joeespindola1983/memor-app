@@ -3,7 +3,12 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { isValidCoordinate, type SavedCoordinate } from "../domain/discovery";
 import { isCaptureEvidence, type CaptureEvidence } from "../domain/capture";
 import { isHostedVPSAnchor, type HostedVPSAnchor } from "../domain/cloudAnchor";
-import type { WorldMapFile } from "../../modules/memor-world-map";
+import { worldMapNative, type WorldMapFile } from "../../modules/memor-world-map";
+
+function traceLocal(event: string, id: string) {
+  console.info("[Memor][RN]", event, id);
+  void worldMapNative?.logEvent(event, id).catch(() => undefined);
+}
 import {
   isPlace, makeArtwork, makePlace, updateArtworkDraft, removeArtworkDraft,
   type ArtworkDraft, type ArtworkKind,
@@ -76,6 +81,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     }
     const created = makePlace(title, new Date(), coordinate, capture, cloudAnchor, worldMap);
     await save([created, ...current.current]);
+    traceLocal("rn.place.created", created.id);
     return created.id;
   };
 
@@ -94,6 +100,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
         : place
     );
     await save(next);
+    traceLocal("rn.artwork.metadata.saved", art.id);
     return art;
   };
 
@@ -135,6 +142,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     await save(current.current.map(p => p.id === placeId ? {
       ...p, worldMap, updatedAt: new Date().toISOString(),
     } : p));
+    traceLocal("rn.map.metadata.updated", worldMap.id);
   };
 
   const deletePlace = async (placeId: string) =>

@@ -11,6 +11,7 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
   private let scene = ARSCNView(frame: .zero)
   private var mapID: String?
   private var titles: [String: String] = [:]
+  private var markersJSON = "[]"
   private var sawRelocalizing = false
   private var localized = false
   private var expanding = false
@@ -80,10 +81,12 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
   func configure(mapId: String?) {
     guard mapID != mapId else { return }
     mapID = mapId
+    setMarkers(json: markersJSON)
     if window != nil { openSession() }
   }
 
   func setMarkers(json: String) {
+    markersJSON = json
     guard let data = json.data(using: .utf8),
           let items = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else {
       titles = [:]

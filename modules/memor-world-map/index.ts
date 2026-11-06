@@ -27,6 +27,9 @@ export type WorldMapViewHandle = {
   saveExpansion(): Promise<WorldMapFile>;
   restoreMap(original: boolean): Promise<WorldMapFile>;
   placeText(id: string, title: string): Promise<{ id: string; transform: number[] }>;
+  pauseForPhoto(): Promise<void>;
+  resumeAfterPhoto(): Promise<void>;
+  placePhoto(id: string, caption: string, sourceURI: string): Promise<{ id: string; transform: number[]; photoUri: string }>;
 };
 export type WorldMapViewProps = ViewProps & RefAttributes<WorldMapViewHandle> & {
   mapId?: string;
@@ -36,6 +39,8 @@ export type WorldMapViewProps = ViewProps & RefAttributes<WorldMapViewHandle> & 
 type WorldMapModule = {
   removeMap(id: string): Promise<void>;
   importMap(id: string, fileUri: string): Promise<WorldMapFile>;
+  exportDiagnostics(): Promise<string>;
+  logEvent(event: string, recordID?: string): Promise<void>;
 };
 
 // A JS bundle can briefly run inside an older development build. Do not crash
