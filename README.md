@@ -113,13 +113,13 @@ O iPhone requer ARKit e o Android, dispositivo certificado para ARCore. No iOS, 
 
 ## POC de relocalização ReactVision VPS (branch `feat/memor-reactvision-vps-poc`)
 
-Veja [`docs/reactvision-vps-qa.md`](docs/reactvision-vps-qa.md). O ReactVision VPS é **opcional**: sem as duas variáveis abaixo, o aplicativo permanece em modo de captura local. Não versionar `.env`.
+Veja [`docs/reactvision-vps-qa.md`](docs/reactvision-vps-qa.md). O ReactVision VPS é **opcional**: sem a chave pública de cliente no ambiente, o aplicativo permanece em modo de captura local. O Project ID já está configurado no código. Não versionar `.env`.
 
 ```bash
-cp .env.example .env
-# Preencha .env com a chave CLIENTE pública recebida no ReactVision Studio e o Project ID correspondente:
+cp -n .env.example .env  # não sobrescreve um .env existente
+# Preencha no .env apenas a chave pública de cliente do mesmo projeto:
 # REACTVISION_CLIENT_KEY=rv_client_...
-# REACTVISION_PROJECT_ID=381827b7-e4e6-422a-98f9-733c861f3f39 # já configurado como padrão
+# REACTVISION_PROJECT_ID já tem valor padrão; só altere para outro projeto
 
 npm install
 npm run typecheck
