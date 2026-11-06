@@ -1,108 +1,160 @@
 import * as Location from "expo-location";
 import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet,
+  Text, TextInput, View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scanBridge } from "../../src/ar/scanBridge";
-import { MemorActionButton, MemorBack, editorial } from "../../src/components/MemorUI";
+import { MemorActionButton, editorial } from "../../src/components/MemorUI";
 import { PixelLabel } from "../../src/components/PixelLabel";
 import { usePlaces } from "../../src/data/PlaceStore";
 import type { SavedCoordinate } from "../../src/domain/discovery";
 import { cleanTitle } from "../../src/domain/models";
-import { shared, tokens } from "../../src/theme/tokens";
+import { tokens } from "../../src/theme/tokens";
 
+/** Figma: Page 03.05 / Lugar · escolher nome (109:1744).
+ * The camera is unmounted while typing, as required by the original flow.
+ */
 export default function NameCapturedPlace() {
-  const router=useRouter();
-  const {createPlace,hydrated,loadError}=usePlaces();
-  const evidence=scanBridge.takePending();
-  const hosted=scanBridge.takePendingAnchor();
-  const [name,setName]=useState("");
-  const [coordinate,setCoordinate]=useState<SavedCoordinate|null>(null);
-  const [locating,setLocating]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const [problem,setProblem]=useState("");
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { createPlace, hydrated, loadError } = usePlaces();
+  const evidence = scanBridge.takePending();
+  const hosted = scanBridge.takePendingAnchor();
+  const [name, setName] = useState("");
+  const [coordinate, setCoordinate] = useState<SavedCoordinate | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState("");
 
-  if (!evidence) return <Redirect href="/capture"/>;
+  if (!evidence) return <Redirect href="/capture" />;
 
   async function geotag() {
-    setLocating(true);setProblem("");
+    setLocating(true);
+    setProblem("");
     try {
-      const permission=await Location.requestForegroundPermissionsAsync();
-      if(permission.status!=="granted") {
-        setProblem("Permissão de localização negada. Você ainda pode salvar sem coordenadas.");
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") {
+        setProblem("Você pode continuar sem informar sua localização.");
         return;
       }
-      const result=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});
-      setCoordinate({latitude:result.coords.latitude,longitude:result.coords.longitude});
-    }catch(e){setProblem(e instanceof Error?e.message:"Não foi possível obter a localização.");}
-    finally{setLocating(false);}
+      const result = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setCoordinate({ latitude: result.coords.latitude, longitude: result.coords.longitude });
+    } catch (error) {
+      if (__DEV__) console.warn("[Memor] location permission", error);
+      setProblem("Não foi possível adicionar a localização. Você pode continuar.");
+    } finally {
+      setLocating(false);
+    }
   }
+
   async function save() {
-    if(!evidence || saving || !cleanTitle(name))return;
-    setSaving(true);setProblem("");
+    if (!evidence || saving || !cleanTitle(name)) return;
+    setSaving(true);
+    setProblem("");
     try {
-      const id=await createPlace(name,coordinate??undefined,evidence,hosted??undefined);
+      const id = await createPlace(name, coordinate ?? undefined, evidence, hosted ?? undefined);
       scanBridge.clearPending();
-      router.replace({pathname:"/places/[id]",params:{id,justCaptured:"1"}});
-    }catch(e){setProblem(e instanceof Error?e.message:"Não foi possível salvar o lugar.");}
-    finally{setSaving(false);}
+      router.replace({ pathname: "/places/[id]", params: { id, justCaptured: "1" } });
+    } catch (error) {
+      if (__DEV__) console.warn("[Memor] save place", error);
+      setProblem("Não foi possível guardar este lugar. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <KeyboardAvoidingView style={{flex:1,backgroundColor:tokens.paper}}
-      behavior={Platform.OS==="ios"?"padding":undefined}>
+    <KeyboardAvoidingView style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{padding:24,paddingBottom:40,gap:23,flexGrow:1}}>
-        <MemorBack label="REFAZER VARREDURA" onPress={()=>{
-          scanBridge.clearPending();router.replace("/capture");
-        }}/>
-        <PixelLabel>MEMOR / {hosted ? "MAPA VPS HOSPEDADO" : "LOCAL OBSERVADO"} / 02</PixelLabel>
-        <Text style={[editorial.heading,{fontSize:36}]}>Como se chama{"\n"}este lugar?</Text>
-        <Text style={editorial.muted}>
-          A sessão de RA foi encerrada para que você possa digitar sem câmera ou processamento espacial ativo.
-        </Text>
-        <TextInput testID="captured-place-name-input" value={name}
-          onChangeText={setName} maxLength={72} autoCorrect={false} autoCapitalize="words"
-          placeholder="Ex.: Escultura da praça" placeholderTextColor={tokens.muted}
-          style={[shared.input,{fontSize:18,borderColor:tokens.ink}]}/>
-        <View style={{backgroundColor:tokens.map,padding:15,gap:8}}>
-          <PixelLabel>OBSERVAÇÃO DA VARREDURA</PixelLabel>
-          <Text style={editorial.body}>
-            {evidence.planeCount} planos · {evidence.normalTrackingSeconds}s tracking · {evidence.pathMeters.toFixed(1)}m explorados
-          </Text>
-          <Text style={[editorial.muted,{fontSize:12}]}>
-            {evidence.quality==="vps-hosted"
-              ?"VPS hospedado com sucesso no ReactVision (cobertura validada pelo provedor)."
-              : evidence.quality==="depth-only"
-              ?"Qualidade experimental por profundidade; nenhum plano físico confirmado."
-              :"Ao menos um plano detectado durante a observação."}
-          </Text>
-          <Text style={[editorial.muted,{fontSize:12}]}>
-            {hosted
-              ? "Mapa VPS hospedado no ReactVision. Uma nova sessão poderá tentar reconhecer este espaço. O Memor mantém o identificador e o conteúdo da obra neste aparelho."
-              : "Esta observação NÃO contém mapa relocalizável. Para revisitar a posição real, hospede uma âncora VPS."}
-          </Text>
-        </View>
-        {hosted ? (
-          <View style={{gap:5,padding:13,borderWidth:1,borderColor:tokens.ink}}>
-            <PixelLabel color={tokens.ink}>✓ ÂNCORA ESPACIAL HOSPEDADA</PixelLabel>
-            <Text style={editorial.muted}>ID: {hosted.cloudAnchorId.slice(0,22)}…</Text>
-            <Text style={editorial.muted}>Válida para teste até {new Date(hosted.expiresAt).toLocaleDateString("pt-BR")}.</Text>
+        contentContainerStyle={[styles.content, {
+          paddingTop: insets.top + 10, paddingBottom: Math.max(insets.bottom, 18) + 18,
+        }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refazer captura"
+          onPress={() => { scanBridge.clearPending(); router.replace("/capture"); }}
+          style={styles.close}>
+          <Text style={styles.closeText}>Fechar</Text>
+        </Pressable>
+
+        <View style={{ marginTop: 28, gap: 15 }}>
+          <PixelLabel>MEMOR / NOVO LUGAR</PixelLabel>
+          <Text style={styles.title}>Como se chama{"\n"}este lugar?</Text>
+          <TextInput
+            testID="captured-place-name-input"
+            accessibilityLabel="Nome do lugar"
+            autoCorrect={false}
+            autoCapitalize="words"
+            maxLength={72}
+            placeholder="Ex.: Escultura da praça"
+            placeholderTextColor={tokens.muted}
+            value={name}
+            onChangeText={setName}
+            style={styles.input}
+          />
+          <View style={styles.confirmation}>
+            <Text style={styles.confirmationMark}>✓</Text>
+            <Text style={[editorial.muted, { flex: 1 }]}>
+              {hosted
+                ? "Lugar guardado. Você poderá encontrá-lo de novo ao voltar aqui."
+                : "Lugar registrado neste aparelho. O posicionamento é temporário."}
+            </Text>
           </View>
-        ) : null}
-        <View style={{gap:10}}>
-          <PixelLabel>LOCALIZAÇÃO / OPCIONAL</PixelLabel>
-          <MemorActionButton outline onPress={geotag} disabled={locating}
-            label={locating?"LOCALIZANDO...":coordinate?"COORDENADA ADICIONADA":"USAR MINHA LOCALIZAÇÃO"}/>
         </View>
-        {loadError ? <Text style={{color:tokens.poetry}}>{loadError}</Text>:null}
-        {problem ? <Text style={{color:tokens.poetry}}>{problem}</Text>:null}
-        <View style={{flex:1}}/>
-        <MemorActionButton onPress={save} label={saving?"SALVANDO...":hosted?"SALVAR LUGAR COM VPS":"SALVAR LUGAR LOCAL"}
-          disabled={saving||!hydrated||Boolean(loadError)||!cleanTitle(name)}/>
-        <Text style={[editorial.muted,{fontSize:11}]}>
-          Sem Supabase e sem publicação automática. O Memor antigo permanece intacto.
+
+        <View style={styles.location}>
+          <PixelLabel>LOCALIZAÇÃO · OPCIONAL</PixelLabel>
+          <Pressable accessibilityRole="button" disabled={locating} onPress={() => void geotag()}
+            style={styles.locationAction}>
+            <Text style={styles.locationText}>
+              {locating ? "Localizando..." : coordinate ? "✓ Localização adicionada" : "+ Adicionar minha localização"}
+            </Text>
+          </Pressable>
+          <Text style={[editorial.muted, { fontSize: 12 }]}>
+            Ajuda você a encontrar o lugar no mapa. Não será publicado automaticamente.
+          </Text>
+        </View>
+
+        <View style={{ flex: 1, minHeight: 42 }} />
+        {problem || loadError ? (
+          <Text accessibilityRole="alert" style={[editorial.muted, { color: tokens.poetry }]}>
+            {problem || loadError}
+          </Text>
+        ) : null}
+        <MemorActionButton label={saving ? "GUARDANDO..." : "SALVAR LUGAR"}
+          onPress={() => void save()}
+          disabled={!hydrated || !!loadError || saving || !cleanTitle(name)} />
+        <Text style={[editorial.muted, { fontSize: 12 }]}>
+          {hosted
+            ? "Uma referência visual do ambiente foi enviada para permitir futuras visitas. Suas palavras não foram publicadas."
+            : "Este cadastro foi salvo somente neste aparelho."}
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: tokens.paper },
+  content: { flexGrow: 1, paddingHorizontal: 22, gap: 18 },
+  close: {
+    alignSelf: "flex-start", height: 38, backgroundColor: tokens.white,
+    borderRadius: 19, paddingHorizontal: 18, justifyContent: "center",
+  },
+  closeText: { color: tokens.ink, fontSize: 15 },
+  title: { color: tokens.ink, fontSize: 38, fontWeight: "400", lineHeight: 44, letterSpacing: -1.3 },
+  input: {
+    height: 70, paddingHorizontal: 15, borderWidth: 1, borderColor: tokens.line,
+    backgroundColor: tokens.white, fontSize: 19, color: tokens.ink,
+  },
+  confirmation: { flexDirection: "row", alignItems: "center", gap: 9 },
+  confirmationMark: { color: tokens.ink, fontSize: 18, fontWeight: "600" },
+  location: { gap: 8, marginTop: 12 },
+  locationAction: {
+    minHeight: 42, paddingVertical: 8, borderBottomWidth: 1,
+    borderBottomColor: tokens.line, justifyContent: "center",
+  },
+  locationText: { color: tokens.ink, fontSize: 15 },
+});

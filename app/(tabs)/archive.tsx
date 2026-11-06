@@ -15,10 +15,10 @@ export default function ArchiveScreen() {
   return (
     <ScrollView style={{backgroundColor:tokens.paper}} contentContainerStyle={{padding:23,gap:25,paddingBottom:48}}>
       <View style={{paddingTop:6,gap:16}}>
-        <PixelLabel>ARQUIVO VIVO · LOCAL</PixelLabel>
+        <PixelLabel>MEMOR / ARQUIVO</PixelLabel>
         <Text style={[editorial.heading,{fontSize:47,letterSpacing:-2.3}]}>Arte deixada{"\n"}no caminho.</Text>
         <Text style={editorial.body}>Intervenções digitais que só existem quando você ocupa o mesmo espaço.</Text>
-        <PixelLabel color={tokens.muted}>RASCUNHOS PRIVADOS · NESTE APARELHO</PixelLabel>
+        <PixelLabel color={tokens.muted}>SEUS LUGARES E INTERVENÇÕES</PixelLabel>
         {loadError ? <Text style={{color:tokens.poetry,fontSize:13}}>{loadError}</Text>:null}
       </View>
 
@@ -42,7 +42,7 @@ export default function ArchiveScreen() {
             </View>
             <View style={{flex:1,gap:6}}>
               <Text style={{color:tokens.ink,fontSize:16,fontWeight:"500"}}>{place.title}</Text>
-              <PixelLabel>{place.artworks.length} INTERVENÇÕES · QA LOCAL</PixelLabel>
+              <PixelLabel>{place.artworks.length} {place.artworks.length===1?"INTERVENÇÃO":"INTERVENÇÕES"}</PixelLabel>
             </View>
             <Text style={{fontSize:22,color:tokens.ink}}>›</Text>
           </Pressable>
@@ -63,7 +63,7 @@ export default function ArchiveScreen() {
                 style={{width:"47%",gap:8}}>
                 <ArtworkCover index={index+1} kind={entry.art.kind==="text"?"poetry":"image"}/>
                 <Text style={{fontSize:14,color:tokens.ink}} numberOfLines={2}>{entry.art.title}</Text>
-                <PixelLabel>{entry.art.kind==="text"?"TEXTO":"CARTÃO QA"}</PixelLabel>
+                <PixelLabel>{entry.art.kind==="text"?"TEXTO":"CARTÃO"}</PixelLabel>
               </Pressable>
             ))}
           </View>

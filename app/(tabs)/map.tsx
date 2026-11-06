@@ -89,10 +89,9 @@ export default function MapScreen() {
         </MapView>
       ) : (
         <View style={{ flex:1, alignItems:"center", justifyContent:"center",padding:30,gap:12 }}>
-          <Text style={editorial.section}>Google Maps não configurado</Text>
+          <Text style={editorial.section}>Mapa indisponível</Text>
           <Text style={[editorial.muted,{textAlign:"center"}]}>
-            Para o mapa Android, informe uma chave restrita do Google Maps SDK ao gerar o build.
-            Isso não afeta as telas nem substitui o requisito ARCore da realidade aumentada.
+            Não foi possível carregar o mapa. Você ainda pode acessar seus lugares no Arquivo.
           </Text>
         </View>
       )}

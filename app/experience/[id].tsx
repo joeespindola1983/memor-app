@@ -1,50 +1,60 @@
-import { ViroARSceneNavigator, parseLocationTransform, worldToLocation } from "@reactvision/react-viro";
+import {
+  ViroARSceneNavigator, parseLocationTransform, worldToLocation,
+} from "@reactvision/react-viro";
 import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  KeyboardAvoidingView, Platform, Pressable, StyleSheet,
-  Text, TextInput, View,
+  KeyboardAvoidingView, Platform, Pressable, ScrollView,
+  StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ActionButton } from "../../src/components/ActionButton";
 import { PixelLabel } from "../../src/components/PixelLabel";
+import { MemorActionButton, editorial } from "../../src/components/MemorUI";
 import ARLabScene from "../../src/ar/ARLabScene";
 import { selectPlacementHit, summarizeHits } from "../../src/ar/hitTest";
 import { sceneBridge, useSceneTracking } from "../../src/ar/sceneBridge";
 import { arSession, useARSession } from "../../src/ar/session";
 import { usePlaces } from "../../src/data/PlaceStore";
-import type { ArtworkKind } from "../../src/domain/models";
-import { shared, tokens } from "../../src/theme/tokens";
+import type { Vec3 } from "../../src/domain/models";
+import { tokens } from "../../src/theme/tokens";
 
+/** Figma: Pages 04.03/04.05 + Template ARExperience (105:464).
+ * The entire camera is the canvas, not a diagnostic dashboard. All cloud
+ * localization and world-to-location conversion remain intact.
+ */
 export default function ARExperience() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { places, addArtwork, updateArtwork } = usePlaces();
-  const place = places.find((item) => item.id === id);
-  const firstScene = useMemo(() => ({ scene: ARLabScene }), []);
+  const place = places.find(item => item.id === id);
+  const initialScene = useMemo(() => ({ scene: ARLabScene }), []);
   const session = useARSession();
   const tracking = useSceneTracking();
   const rvConfigured = Constants.expoConfig?.extra?.reactvisionConfigured === true;
-  const hasCloudAnchor = Boolean(place?.cloudAnchor);
+  const hasCloudAnchor = !!place?.cloudAnchor;
   const spatialReady = !hasCloudAnchor || (rvConfigured && tracking.anchorLocalized);
   const anchoredArtworks = place?.cloudAnchor
-    ? place.artworks.filter((art) =>
+    ? place.artworks.filter(art =>
         art.locationPosition && art.locationAnchorId === place.cloudAnchor?.cloudAnchorId)
     : [];
-  const moveableArtworks = hasCloudAnchor
-    ? (tracking.anchorLocalized ? anchoredArtworks : [])
+  const visibleArtworks = hasCloudAnchor
+    ? tracking.anchorLocalized ? anchoredArtworks : []
     : session.artworks;
-  const [kind, setKind] = useState<ArtworkKind>("text");
-  const [label, setLabel] = useState("Minha primeira intervenção");
+  const [label, setLabel] = useState("");
   const [placing, setPlacing] = useState(false);
-  const [message, setMessage] = useState("Procure uma superfície bem iluminada.");
+  const [message, setMessage] = useState("");
   const [problem, setProblem] = useState("");
-  const [lastHitSummary, setLastHitSummary] = useState<string | null>(null);
   const [movingID, setMovingID] = useState<string | null>(null);
 
   useEffect(() => {
+    if (id) arSession.start(String(id));
+    return () => arSession.clear();
+  }, [id]);
+
+  useEffect(() => {
+    if (!__DEV__) return;
     console.info("[Memor VPS] Opening AR place", {
       providerConfigured: rvConfigured,
       placeHasHostedAnchor: hasCloudAnchor,
@@ -53,208 +63,194 @@ export default function ARExperience() {
     });
   }, [rvConfigured, hasCloudAnchor, place?.id, anchoredArtworks.length, place?.artworks.length]);
 
-  useEffect(() => {
-    if (id) arSession.start(String(id));
-    return () => arSession.clear();
-  }, [id]);
-
-  function anchorPosition(worldPosition: [number, number, number]): [number, number, number] | undefined {
+  function anchorPosition(worldPosition: Vec3): Vec3 | undefined {
     if (!hasCloudAnchor) return undefined;
-    if (!rvConfigured) throw new Error("Configure a chave e o Project ID ReactVision antes de posicionar obras persistentes.");
-    const token = sceneBridge.getAnchorFrame();
-    const matrix = parseLocationTransform(token);
-    if (!matrix) throw new Error("O lugar ainda não foi reconhecido. Explore o ambiente devagar.");
+    if (!rvConfigured) throw new Error("Este lugar não está disponível agora.");
+    const matrix = parseLocationTransform(sceneBridge.getAnchorFrame());
+    if (!matrix) throw new Error("Continue apontando a câmera para reconhecer este lugar.");
     const local = worldToLocation(matrix, worldPosition);
-    if (!local || !local.every(Number.isFinite)) throw new Error("Não foi possível converter a posição para a âncora.");
+    if (!local || !local.every(Number.isFinite)) {
+      throw new Error("Não foi possível encontrar uma posição segura. Tente novamente.");
+    }
     return [local[0], local[1], local[2]];
   }
 
-  async function placeAtReticle() {
-    if (!place || placing || session.mode !== "create") return;
+  async function createArtwork() {
+    if (!place || placing || session.mode !== "create" || !label.trim()) return;
     setPlacing(true);
     setProblem("");
+    setMessage("");
     try {
-      if (tracking.status !== "ready") {
-        throw new Error("Rastreamento ainda não está normal. Observe superfícies fixas e bem iluminadas.");
+      if (tracking.status !== "ready" || !spatialReady) {
+        throw new Error("Movimente a câmera devagar até o lugar ficar pronto.");
       }
       const hits = await sceneBridge.raycast();
-      const summary = summarizeHits(hits);
-      setLastHitSummary(summary);
-      console.info("[Memor AR] Hit test:", {
-        summary,
-        cameraForward: sceneBridge.getCameraDirection(),
-        depthReady: tracking.depthReady,
-      });
+      if (__DEV__) console.info("[Memor AR] Hit test", summarizeHits(hits));
       const placement = selectPlacementHit(hits);
-      if (!placement) {
-        throw new Error(hits.length === 0
-          ? "O raycast não encontrou referências neste ponto. Explore o quarto devagar e volte a apontar para a cama."
-          : "O ARKit encontrou referências, mas nenhuma superfície utilizável. Tente mudar o ângulo ou se aproximar.");
-      }
+      if (!placement) throw new Error("Aponte para uma superfície mais nítida e tente novamente.");
       const locationPosition = anchorPosition(placement.position);
-      const saved = await addArtwork(place.id, kind, label, placement.position, locationPosition);
+      const saved = await addArtwork(place.id, "text", label, placement.position, locationPosition);
       arSession.addArtwork(saved);
-      setMessage(placement.source === "plane"
-        ? "Plano reconhecido. Intervenção posicionada: toque em VISUALIZAR."
-        : placement.source === "depth"
-        ? "Posicionado com profundidade LiDAR. Resultado experimental, não um plano confirmado."
-        : "Posicionamento estimado. Ainda não é um plano reconhecido: confira o alinhamento visual.");
-    } catch (e) {
-      setProblem(e instanceof Error ? e.message : "Falha ao posicionar intervenção.");
+      setLabel("");
+      setMessage("Sua intervenção está no lugar.");
+    } catch (error) {
+      if (__DEV__) console.warn("[Memor AR] Unable to place artwork", error);
+      setProblem(error instanceof Error ? error.message : "Não foi possível posicionar. Tente novamente.");
     } finally {
       setPlacing(false);
     }
   }
 
-  async function moveSelectedArtwork() {
+  async function moveArtwork() {
     if (!place || !movingID || placing) return;
-    const artwork = hasCloudAnchor
-      ? anchoredArtworks.find((item) => item.id === movingID)
-      : session.artworks.find((item) => item.id === movingID);
+    const artwork = visibleArtworks.find(item => item.id === movingID);
     if (!artwork) { setMovingID(null); return; }
-    setPlacing(true);setProblem("");
+    setPlacing(true);
+    setProblem("");
+    setMessage("");
     try {
-      if (tracking.status !== "ready") throw new Error("Aguarde o rastreamento normal.");
-      const hits=await sceneBridge.raycast();
-      setLastHitSummary(summarizeHits(hits));
-      const placement=selectPlacementHit(hits);
-      if (!placement) throw new Error("Nenhuma superfície utilizável sob a mira.");
+      if (tracking.status !== "ready" || !spatialReady) {
+        throw new Error("Aguarde enquanto encontramos este lugar.");
+      }
+      const hits = await sceneBridge.raycast();
+      if (__DEV__) console.info("[Memor AR] Move hit test", summarizeHits(hits));
+      const placement = selectPlacementHit(hits);
+      if (!placement) throw new Error("Aponte para uma superfície nítida e tente novamente.");
       if (hasCloudAnchor && !artwork.locationPosition) {
-        throw new Error("Esta obra é anterior ao VPS e não possui posição recuperável.");
+        throw new Error("Esta intervenção foi criada antes do reconhecimento do lugar.");
       }
       const locationPosition = anchorPosition(placement.position);
-      const updated=await updateArtwork(place.id,artwork.id,artwork.title,placement.position,locationPosition);
+      const updated = await updateArtwork(place.id, artwork.id, artwork.title, placement.position, locationPosition);
       arSession.replaceArtwork(updated);
       setMovingID(null);
-      setMessage(placement.source === "estimated"
-        ? "Posição experimental atualizada nesta sessão."
-        : "Intervenção reposicionada nesta sessão.");
-    }catch(e){setProblem(e instanceof Error?e.message:"Não foi possível mover.");}
-    finally{setPlacing(false);}
+      setMessage("Intervenção movida.");
+    } catch (error) {
+      if (__DEV__) console.warn("[Memor AR] Unable to move artwork", error);
+      setProblem(error instanceof Error ? error.message : "Não foi possível mover. Tente novamente.");
+    } finally {
+      setPlacing(false);
+    }
   }
 
-  if (!place) return <View style={styles.missing}><Text>Lugar não encontrado.</Text>
-    <ActionButton label="VOLTAR" onPress={() => router.back()} /></View>;
+  if (!place) {
+    return <View style={styles.missing}>
+      <Text style={editorial.section}>Lugar não encontrado.</Text>
+      <MemorActionButton label="VOLTAR" onPress={() => router.back()} />
+    </View>;
+  }
+
+  const placeStatus = hasCloudAnchor
+    ? tracking.anchorLocalized ? "LUGAR ENCONTRADO"
+      : tracking.localizationError ? "AINDA NÃO ENCONTRAMOS ESTE LUGAR"
+      : "PROCURANDO ESTE LUGAR"
+    : "CÂMERA ABERTA";
+  const instructions = tracking.status !== "ready"
+    ? "Movimente o celular devagar e observe superfícies bem iluminadas."
+    : hasCloudAnchor && !tracking.anchorLocalized
+    ? "Olhe ao redor para reconhecer o ambiente em que o lugar foi criado."
+    : session.mode === "create"
+    ? "Aponte a mira para onde você quer deixar o texto."
+    : visibleArtworks.length > 0
+    ? "Suas intervenções estão neste espaço."
+    : "Este lugar ainda não tem intervenções.";
 
   return (
     <View style={styles.root}>
       <ViroARSceneNavigator
-        initialScene={firstScene}
+        initialScene={initialScene}
         provider={rvConfigured ? "reactvision" : "none"}
         depthEnabled={true}
         hdrEnabled={false}
         style={StyleSheet.absoluteFill}
       />
-
       <View pointerEvents="none" style={styles.reticle}>
         <View style={styles.targetOuter}><View style={styles.targetInner} /></View>
       </View>
 
-      <View style={[styles.topPanel, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button">
-          <PixelLabel color={tokens.ink}>‹ SAIR DA CÂMERA</PixelLabel>
+      <View style={[styles.header, { top: insets.top + 10 }]}>
+        <Pressable onPress={() => router.back()} accessibilityRole="button"
+          accessibilityLabel="Sair da câmera" style={styles.close}>
+          <Text style={styles.closeText}>×</Text>
         </Pressable>
-        <Text style={{ color: tokens.ink, fontSize: 22, fontWeight: "700", marginTop: 9 }}>
-          {place.title}
-        </Text>
-        <PixelLabel color={tokens.muted}>
-          {hasCloudAnchor ? `VPS · ${anchoredArtworks.length} OBRAS ANCORADAS` :
-            `LABORATÓRIO RA · ${session.artworks.length} NESTA SESSÃO`}
-        </PixelLabel>
-        {hasCloudAnchor ? (
-          <PixelLabel color={tracking.anchorLocalized ? tokens.ink : tokens.poetry}>
-            {!rvConfigured ? "VPS NÃO CONFIGURADO NESTE BUILD" :
-              tracking.anchorLocalized ? "● LUGAR RECONHECIDO · OBRAS RECUPERADAS" :
-              tracking.localizationError ? `FALHA VPS: ${tracking.localizationError}` :
-              "◌ RECONHECENDO LUGAR · OBSERVE AS REFERÊNCIAS ORIGINAIS"}
-          </PixelLabel>
-        ) : null}
-        <PixelLabel color={tracking.status === "ready" ? tokens.dark : tokens.muted}>
-          {tracking.status === "ready" ? "● RASTREAMENTO ATIVO" : tracking.status === "limited" ? "◌ RASTREAMENTO LIMITADO" : "◌ INICIANDO ARKIT / ARCORE"}
-        </PixelLabel>
-        <PixelLabel color={tokens.muted}>
-          {tracking.hasCameraDirection ? "DIREÇÃO DA CÂMERA: OK" : "AGUARDANDO ORIENTAÇÃO DA CÂMERA"}
-          {" · "}
-          {tracking.depthReady ? "PROFUNDIDADE: PRONTA" : "PROFUNDIDADE: PENDENTE"}
-        </PixelLabel>
+        <View style={{ flex: 1, gap: 3 }}>
+          <PixelLabel color={tokens.ink}>MEMOR / REALIDADE AUMENTADA</PixelLabel>
+          <Text style={styles.placeName} numberOfLines={1}>{place.title}</Text>
+        </View>
       </View>
 
-      <KeyboardAvoidingView
-        pointerEvents="box-none"
+      <KeyboardAvoidingView pointerEvents="box-none"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={[styles.bottomContainer, { paddingBottom: Math.max(20, insets.bottom + 8) }]}
-      >
-        <View style={styles.sheet}>
-          <View style={styles.segmented}>
-            {(["create", "view"] as const).map((mode) => (
+        style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+        <View style={styles.panel}>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, {
+              backgroundColor: spatialReady && tracking.status === "ready" ? tokens.image : tokens.poetry,
+            }]} />
+            <PixelLabel color={tokens.ink}>{placeStatus}</PixelLabel>
+          </View>
+          <Text style={[editorial.muted, { fontSize: 13 }]}>{instructions}</Text>
+
+          <View style={styles.switcher}>
+            {(["create", "view"] as const).map(mode => (
               <Pressable key={mode} accessibilityRole="button"
-                onPress={() => arSession.setMode(mode)}
-                style={[styles.segment, session.mode === mode && { backgroundColor: tokens.mint }]}>
-                <Text style={{ color: tokens.ink, fontWeight: "700", fontSize: 13 }}>
-                  {mode === "create" ? "CRIAR" : "VISUALIZAR"}
-                </Text>
+                accessibilityState={{ selected: session.mode === mode }}
+                onPress={() => { setMovingID(null); setProblem(""); arSession.setMode(mode); }}
+                style={[styles.switchTab, session.mode === mode && styles.switchTabSelected]}>
+                <PixelLabel color={session.mode === mode ? tokens.paper : tokens.ink}>
+                  {mode === "create" ? "+ CRIAR" : "VER INTERVENÇÕES"}
+                </PixelLabel>
               </Pressable>
             ))}
           </View>
 
           {session.mode === "create" ? (
-            <View style={{ gap: 10 }}>
-              <PixelLabel>TIPO DE INTERVENÇÃO</PixelLabel>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <Pressable onPress={() => setKind("text")}
-                  style={[styles.kindChoice, kind === "text" && styles.kindSelected]}>
-                  <Text style={styles.kindText}>TEXTO 3D</Text>
-                </Pressable>
-                <Pressable onPress={() => setKind("card")}
-                  style={[styles.kindChoice, kind === "card" && styles.kindSelected]}>
-                  <Text style={styles.kindText}>CARTÃO / FOTO</Text>
-                </Pressable>
-              </View>
+            <View style={styles.editor}>
               <TextInput
-                testID="artwork-title-input" style={[shared.input, { minHeight: 44 }]}
-                maxLength={72} value={label} onChangeText={setLabel}
-                placeholder="Nome da obra" placeholderTextColor={tokens.muted}
+                testID="artwork-title-input"
+                accessibilityLabel="Texto da intervenção"
+                style={styles.input}
+                maxLength={72}
+                value={label}
+                onChangeText={setLabel}
+                placeholder="Escreva algo para deixar aqui..."
+                placeholderTextColor={tokens.muted}
               />
-              <ActionButton label="POSICIONAR NA MIRA +" loading={placing}
-                disabled={!label.trim() || placing || tracking.status !== "ready" || !tracking.hasCameraDirection || !spatialReady}
-                onPress={placeAtReticle}/>
+              <MemorActionButton label={placing ? "POSICIONANDO..." : "DEIXAR AQUI"}
+                onPress={() => void createArtwork()}
+                disabled={!label.trim() || placing || tracking.status !== "ready" ||
+                  !tracking.hasCameraDirection || !spatialReady} />
             </View>
           ) : (
-            <View style={{ gap: 9 }}>
-              <PixelLabel>VISUALIZAÇÃO / MESMA SESSÃO</PixelLabel>
-              <Text style={shared.body}>{hasCloudAnchor && !tracking.anchorLocalized
-                ? "Aguardando a recuperação do mapa. Mova a câmera devagar pelo lugar original."
-                : moveableArtworks.length === 0
-                ? "Crie uma intervenção nesta sessão para vê-la posicionada no ambiente."
-                : `${moveableArtworks.length} intervenções disponíveis. Selecione uma obra para movê-la.`}
-              </Text>
-              {moveableArtworks.map((art) => (
-                <Pressable key={art.id} accessibilityRole="button"
-                  onPress={()=>setMovingID(art.id)}
-                  style={{padding:9,borderWidth:1,borderColor:movingID===art.id?tokens.ink:tokens.line,
-                    backgroundColor:movingID===art.id?tokens.mint:tokens.paper}}>
-                  <Text style={{color:tokens.ink,fontSize:13}} numberOfLines={1}>{art.title}  ·  MOVER</Text>
-                </Pressable>
-              ))}
-              {movingID ? <ActionButton label="MOVER PARA A MIRA" loading={placing}
-                disabled={placing||tracking.status!=="ready"||!tracking.hasCameraDirection||!spatialReady}
-                onPress={moveSelectedArtwork}/> : null}
-              <Text style={shared.secondary}>
-                {hasCloudAnchor
-                  ? "O ReactVision recupera as obras salvas no frame da âncora VPS. Obras antigas sem frame permanecem no Arquivo."
-                  : "Sem âncora VPS, obras antigas permanecem no Arquivo e não são restauradas espacialmente."}
-              </Text>
+            <View style={{ gap: 10 }}>
+              {visibleArtworks.length ? (
+                <ScrollView style={styles.artworkScroll} keyboardShouldPersistTaps="handled">
+                  {visibleArtworks.map(art => (
+                    <Pressable key={art.id} accessibilityRole="button"
+                      accessibilityState={{ selected: movingID === art.id }}
+                      onPress={() => setMovingID(movingID === art.id ? null : art.id)}
+                      style={[styles.artworkRow, movingID === art.id && styles.artworkSelected]}>
+                      <Text style={styles.artworkTitle} numberOfLines={1}>{art.title}</Text>
+                      <PixelLabel color={tokens.ink}>{movingID === art.id ? "SELECIONADA" : "MOVER"}</PixelLabel>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : (
+                <Text style={editorial.muted}>
+                  {hasCloudAnchor && !tracking.anchorLocalized
+                    ? "Assim que reconhecermos o lugar, suas intervenções aparecerão."
+                    : "Nenhuma intervenção ainda. Toque em Criar para começar."}
+                </Text>
+              )}
+              {movingID ? (
+                <MemorActionButton label={placing ? "MOVENDO..." : "MOVER PARA A MIRA"}
+                  onPress={() => void moveArtwork()}
+                  disabled={placing || tracking.status !== "ready" || !tracking.hasCameraDirection || !spatialReady}/>
+              ) : null}
             </View>
           )}
-          {problem ? <Text style={{ color: "#A23D34", fontSize: 12 }}>{problem}</Text> :
-            <Text style={[shared.secondary, { fontSize: 11 }]}>{placing ?
-              "Consultando ARKit/ARCore..." : tracking.status !== "ready" ?
-              "Aguarde o rastreamento ficar ativo. Evite superfícies lisas e movimentos rápidos." : message}</Text>}
-          {lastHitSummary ? (
-            <Text selectable style={[shared.secondary, { fontFamily: "monospace", fontSize: 10 }]}>
-              ÚLTIMO TESTE: {lastHitSummary}
-            </Text>
-          ) : null}
+
+          {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> :
+            message ? <Text style={styles.feedback}>{message}</Text> : null}
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -262,34 +258,55 @@ export default function ARExperience() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: tokens.dark },
-  missing: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 20 },
-  topPanel: {
-    position: "absolute", top: 0, left: 0, right: 0,
-    paddingHorizontal: 19, paddingBottom: 18, backgroundColor: tokens.paper,
-    borderBottomWidth: 1, borderBottomColor: tokens.line,
+  root: { flex: 1, backgroundColor: tokens.ink },
+  missing: { flex: 1, padding: 24, justifyContent: "center", gap: 18, backgroundColor: tokens.paper },
+  header: {
+    position: "absolute", left: 12, right: 12, height: 70,
+    backgroundColor: tokens.paper, paddingHorizontal: 14,
+    flexDirection: "row", alignItems: "center", gap: 13,
   },
+  close: {
+    width: 44, height: 44, borderWidth: 1, borderColor: tokens.line,
+    backgroundColor: tokens.white, alignItems: "center", justifyContent: "center",
+  },
+  closeText: { color: tokens.ink, fontSize: 28, lineHeight: 32 },
+  placeName: { color: tokens.ink, fontSize: 15 },
   reticle: {
-    position: "absolute", top: "48%", left: "50%", transform: [{ translateX: -15 }, { translateY: -15 }],
+    position: "absolute", top: "46%", left: "50%",
+    transform: [{ translateX: -15 }, { translateY: -15 }],
   },
   targetOuter: {
-    height: 30, width: 30, borderWidth: 2, borderColor: tokens.mint,
+    width: 30, height: 30, borderWidth: 1, borderColor: tokens.image,
     borderRadius: 15, alignItems: "center", justifyContent: "center",
   },
-  targetInner: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: tokens.white },
-  bottomContainer: {
-    position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 13,
+  targetInner: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: tokens.paper },
+  bottom: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 12 },
+  panel: {
+    backgroundColor: tokens.paper, borderColor: tokens.ink,
+    borderWidth: 1, padding: 16, gap: 12,
   },
-  sheet: {
-    backgroundColor: tokens.paper, borderRadius: tokens.radius.lg,
-    padding: 16, gap: 11, borderWidth: 1, borderColor: tokens.line,
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  statusDot: { height: 8, width: 8 },
+  switcher: {
+    flexDirection: "row", backgroundColor: tokens.surfaceHover,
+    padding: 2, gap: 2,
   },
-  segmented: { flexDirection: "row", gap: 4, padding: 4, borderRadius: 12, backgroundColor: "#E0E6DD" },
-  segment: { flex: 1, padding: 12, alignItems: "center", borderRadius: 9 },
-  kindChoice: {
-    flex: 1, borderWidth: 1, borderColor: tokens.line, borderRadius: 9,
-    padding: 11, alignItems: "center", backgroundColor: tokens.white,
+  switchTab: { flex: 1, minHeight: 42, alignItems: "center", justifyContent: "center" },
+  switchTabSelected: { backgroundColor: tokens.ink },
+  editor: { gap: 10 },
+  input: {
+    backgroundColor: tokens.white, minHeight: 52,
+    borderWidth: 1, borderColor: tokens.line,
+    color: tokens.ink, paddingHorizontal: 14, fontSize: 15,
   },
-  kindSelected: { borderColor: tokens.dark, backgroundColor: tokens.mint },
-  kindText: { fontSize: 11, fontWeight: "700", color: tokens.ink },
+  artworkScroll: { maxHeight: 148 },
+  artworkRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    borderBottomWidth: 1, borderBottomColor: tokens.line,
+    paddingVertical: 12, paddingHorizontal: 5,
+  },
+  artworkSelected: { backgroundColor: tokens.map },
+  artworkTitle: { fontSize: 14, color: tokens.ink, flex: 1 },
+  error: { color: tokens.poetry, fontSize: 13, lineHeight: 18 },
+  feedback: { color: tokens.ink, fontSize: 13, lineHeight: 18 },
 });

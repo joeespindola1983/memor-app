@@ -51,8 +51,7 @@ export default function EditorialDestinationScreen() {
 
     <PixelLabel>01 / ESCOLHA A OBRA</PixelLabel>
     {options.length===0 ? <Text style={editorial.muted}>
-      Este lugar ainda não possui textos ancorados. Os cartões do laboratório são modelos QA,
-      não fotografias reais. Crie um texto para organizar sua primeira intervenção.
+      Ainda não há textos para organizar neste lugar. Crie uma intervenção para começar.
     </Text> : options.map((item)=>(
       <Pressable key={item.id} accessibilityRole="button" onPress={()=>{
         setArtworkID(item.id);setPreview(false);

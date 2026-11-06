@@ -61,7 +61,7 @@ export default function NewPlace() {
           <PixelLabel>01 / DEFINIR UM LUGAR</PixelLabel>
           <Text style={shared.h1}>Onde vamos criar?</Text>
           <Text style={shared.secondary}>
-            Um monumento, uma praça ou um espaço próximo. Nesta etapa criamos somente o cadastro local.
+            Um monumento, uma praça ou um lugar que você queira recordar.
           </Text>
         </View>
         <View style={{ gap: 10 }}>
@@ -90,7 +90,7 @@ export default function NewPlace() {
             loading={saving} onPress={create}
           />
           <Text style={[shared.secondary, { textAlign: "center", fontSize: 11 }]}>
-            Sem conta, sem Supabase e sem publicação. Apenas QA neste dispositivo.
+            Este lugar ficará privado neste aparelho até você escolher compartilhá-lo.
           </Text>
         </View>
       </KeyboardAvoidingView>
