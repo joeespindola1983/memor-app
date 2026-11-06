@@ -20,7 +20,7 @@ export default function ARExperience() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { places, addArtwork } = usePlaces();
+  const { places, addArtwork, updateArtwork } = usePlaces();
   const place = places.find((item) => item.id === id);
   const firstScene = useMemo(() => ({ scene: ARLabScene }), []);
   const session = useARSession();
@@ -31,6 +31,7 @@ export default function ARExperience() {
   const [message, setMessage] = useState("Procure uma superfície bem iluminada.");
   const [problem, setProblem] = useState("");
   const [lastHitSummary, setLastHitSummary] = useState<string | null>(null);
+  const [movingID, setMovingID] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) arSession.start(String(id));
@@ -71,6 +72,27 @@ export default function ARExperience() {
     } finally {
       setPlacing(false);
     }
+  }
+
+  async function moveSelectedArtwork() {
+    if (!place || !movingID || placing) return;
+    const artwork = session.artworks.find((item) => item.id === movingID);
+    if (!artwork) { setMovingID(null); return; }
+    setPlacing(true);setProblem("");
+    try {
+      if (tracking.status !== "ready") throw new Error("Aguarde o rastreamento normal.");
+      const hits=await sceneBridge.raycast();
+      setLastHitSummary(summarizeHits(hits));
+      const placement=selectPlacementHit(hits);
+      if (!placement) throw new Error("Nenhuma superfície utilizável sob a mira.");
+      const updated=await updateArtwork(place.id,artwork.id,artwork.title,placement.position);
+      arSession.replaceArtwork(updated);
+      setMovingID(null);
+      setMessage(placement.source === "estimated"
+        ? "Posição experimental atualizada nesta sessão."
+        : "Intervenção reposicionada nesta sessão.");
+    }catch(e){setProblem(e instanceof Error?e.message:"Não foi possível mover.");}
+    finally{setPlacing(false);}
   }
 
   if (!place) return <View style={styles.missing}><Text>Lugar não encontrado.</Text>
@@ -153,11 +175,22 @@ export default function ARExperience() {
               <PixelLabel>VISUALIZAÇÃO / MESMA SESSÃO</PixelLabel>
               <Text style={shared.body}>{session.artworks.length === 0
                 ? "Crie uma intervenção nesta sessão para vê-la posicionada no ambiente."
-                : `${session.artworks.length} intervenções visíveis. Caminhe ao redor e avalie a estabilidade.`}
+                : `${session.artworks.length} intervenções desta sessão. Selecione uma obra para movê-la.`}
               </Text>
+              {session.artworks.map((art) => (
+                <Pressable key={art.id} accessibilityRole="button"
+                  onPress={()=>setMovingID(art.id)}
+                  style={{padding:9,borderWidth:1,borderColor:movingID===art.id?tokens.ink:tokens.line,
+                    backgroundColor:movingID===art.id?tokens.mint:tokens.paper}}>
+                  <Text style={{color:tokens.ink,fontSize:13}} numberOfLines={1}>{art.title}  ·  MOVER</Text>
+                </Pressable>
+              ))}
+              {movingID ? <ActionButton label="MOVER PARA A MIRA" loading={placing}
+                disabled={placing||tracking.status!=="ready"||!tracking.hasCameraDirection}
+                onPress={moveSelectedArtwork}/> : null}
               <Text style={shared.secondary}>
-                Sair da câmera encerra a referência espacial. Os rascunhos permanecem no Arquivo,
-                mas não serão relocalizados até implementarmos VPS/Cloud Anchor.
+                Obras anteriores permanecem no Arquivo, mas NÃO foram restauradas espacialmente.
+                Sair da câmera encerra esta referência até implementarmos VPS/Cloud Anchor.
               </Text>
             </View>
           )}

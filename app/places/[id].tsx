@@ -11,7 +11,7 @@ import { shared, tokens } from "../../src/theme/tokens";
 
 export default function PlaceDetails() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, justCaptured } = useLocalSearchParams<{ id: string; justCaptured?: string }>();
   const { places, hydrated, deletePlace } = usePlaces();
   const { removePlaceDrafts } = useEditorialDrafts();
   const [removing, setRemoving] = useState(false);
@@ -40,9 +40,15 @@ export default function PlaceDetails() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ padding: 22, gap: 20, paddingBottom: 42 }}>
-        <Pressable accessibilityRole="button" onPress={() => router.replace("/")}>
+        <Pressable accessibilityRole="button" onPress={() => router.replace("/(tabs)/archive")}>
           <PixelLabel color={tokens.dark}>‹ TODOS OS LUGARES</PixelLabel>
         </Pressable>
+        {justCaptured === "1" ? (
+          <View style={{backgroundColor:tokens.park,padding:14,gap:6}}>
+            <PixelLabel color={tokens.ink}>✓ LOCAL REGISTRADO NESTE APARELHO</PixelLabel>
+            <Text style={shared.secondary}>Agora você pode abrir uma sessão AR e criar suas intervenções.</Text>
+          </View>
+        ) : null}
         <View style={[shared.card, { backgroundColor: tokens.dark, minHeight: 185, justifyContent: "space-between" }]}>
           <PixelLabel color={tokens.mint}>LOCAL / QA EXPERIMENTAL</PixelLabel>
           <View style={{ gap: 7 }}>
@@ -50,13 +56,33 @@ export default function PlaceDetails() {
             <Text style={{ color: tokens.mint, fontSize: 12 }}>{place.artworks.length} intervenções locais</Text>
           </View>
         </View>
+        {place.capture ? (
+          <View style={{gap:8,backgroundColor:tokens.map,padding:14}}>
+            <PixelLabel color={tokens.ink}>OBSERVAÇÃO ESPACIAL SALVA</PixelLabel>
+            <Text style={shared.body}>
+              {place.capture.planeCount} planos · {place.capture.normalTrackingSeconds}s tracking · {place.capture.pathMeters.toFixed(1)}m explorados
+            </Text>
+            <Text style={shared.secondary}>
+              {place.capture.quality === "depth-only"
+                ? "Profundidade detectada sem plano confirmado. "
+                : "Ao menos um plano confirmado durante a varredura. "}
+              Este registro é diagnóstico: ainda não contém mapa espacial relocalizável.
+            </Text>
+          </View>
+        ) : (
+          <View style={{gap:5}}>
+            <PixelLabel>CADASTRO LOCAL / SEM VARREDURA</PixelLabel>
+            <Text style={shared.secondary}>Este lugar foi cadastrado antes do fluxo de captura experimental.</Text>
+          </View>
+        )}
         <View style={{ gap: 10 }}>
           <Text style={shared.h2}>Experiência no espaço</Text>
           <Text style={shared.secondary}>
-            Na primeira etapa, criamos e visualizamos obras na mesma sessão AR.
-            A visita persistente em outro aparelho será o próximo teste.
+            Abrir a RA inicia uma nova sessão de rastreamento. Você poderá
+            posicionar novas intervenções, mas obras anteriores NÃO reaparecem
+            na posição original até termos VPS ou âncoras compartilhadas.
           </Text>
-          <ActionButton label="ABRIR LABORATÓRIO AR" onPress={() =>
+          <ActionButton label="CRIAR / VISUALIZAR EM RA" onPress={() =>
             router.push({ pathname: "/experience/[id]", params: { id: place.id } })}
           />
         </View>
@@ -69,7 +95,13 @@ export default function PlaceDetails() {
               <Text style={shared.secondary}>Abra a RA, crie uma obra e alterne para Visualizar para conferir.</Text>
             </View>
           ) : place.artworks.map((item, index) => (
-            <View key={item.id} style={[shared.card, { flexDirection: "row", gap: 12 }]}>
+            <Pressable key={item.id} accessibilityRole="button"
+              accessibilityLabel={`Editar intervenção ${item.title}`}
+              onPress={() => router.push({
+                pathname: "/places/[id]/artworks/[artworkId]",
+                params: { id: place.id, artworkId: item.id },
+              })}
+              style={[shared.card, { flexDirection: "row", gap: 12, alignItems: "center" }]}>
               <View style={{ width: 42, height: 42, backgroundColor: tokens.mint,
                 alignItems: "center", justifyContent: "center", borderRadius: 9 }}>
                 <Text style={{ color: tokens.ink, fontSize: 17 }}>{item.kind === "text" ? "T" : "▣"}</Text>
@@ -79,7 +111,8 @@ export default function PlaceDetails() {
                 <Text style={{ color: tokens.ink, fontWeight: "600" }}>{item.title}</Text>
                 <Text style={shared.secondary}>Pose da sessão original · não relocalizável</Text>
               </View>
-            </View>
+              <Text style={{fontSize:20,color:tokens.ink}}>›</Text>
+            </Pressable>
           ))}
         </View>
         <View style={{gap:9}}>

@@ -28,7 +28,7 @@ export default function ArchiveScreen() {
             <ArtworkCover index={1}/>
             <PixelLabel>O ARQUIVO COMEÇA NA RUA</PixelLabel>
             <Text style={editorial.body}>Quando você registrar um lugar e deixar uma intervenção, ela aparecerá aqui.</Text>
-            <MemorActionButton label="CRIAR INTERVENÇÃO" onPress={()=>router.push("/places/new")}/>
+            <MemorActionButton label="CRIAR INTERVENÇÃO" onPress={()=>router.push("/capture")}/>
           </View>
         ) : sorted.map((place)=>(
           <Pressable key={place.id} accessibilityRole="button"
@@ -48,7 +48,7 @@ export default function ArchiveScreen() {
           </Pressable>
         ))}
         {sorted.length>0 ? (
-          <MemorActionButton label="NOVO LUGAR" onPress={()=>router.push("/places/new")} outline/>
+          <MemorActionButton label="NOVO LUGAR" onPress={()=>router.push("/capture")} outline/>
         ) : null}
       </MemorSection>
 

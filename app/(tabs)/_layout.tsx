@@ -13,7 +13,7 @@ export default function MemorTabs() {
         tabBar={({ state }) => (
           <MemorBottomNav selection={state.routes[state.index].name}
             onSelect={(key) => {
-              if (key === "create") router.push("/places/new");
+              if (key === "create") router.push("/capture");
               else if (key === "map") router.push("/(tabs)/map");
               else if (key === "archive") router.push("/(tabs)/archive");
               else router.push("/(tabs)/profile");

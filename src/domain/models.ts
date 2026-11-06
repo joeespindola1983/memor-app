@@ -1,4 +1,5 @@
 import type { SavedCoordinate } from "./discovery";
+import type { CaptureEvidence } from "./capture";
 
 // Keep this domain module executable by Node 22 strip-types without a runtime
 // TypeScript import (the Expo mobile bundler resolves extensionless imports).
@@ -30,6 +31,8 @@ export interface LabPlace {
   updatedAt: string;
   artworks: ArtworkDraft[];
   coordinate?: SavedCoordinate;
+  /** Tracking evidence only, not ARWorldMap or cross-session relocalization. */
+  capture?: CaptureEvidence;
 }
 
 export function cleanTitle(value: string): string {
@@ -46,13 +49,15 @@ function qaId(): string {
   return `qa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate): LabPlace {
+export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate,
+  capture?: CaptureEvidence): LabPlace {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Informe um nome para o lugar.");
   if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
   const at = now.toISOString();
   return { id: qaId(), title: normalized, createdAt: at, updatedAt: at, artworks: [],
     ...(coordinate ? { coordinate } : {}),
+    ...(capture ? { capture } : {}),
   };
 }
 
@@ -65,12 +70,40 @@ export function makeArtwork(
   return { id: qaId(), kind, title: normalized, sessionPosition: [...position], createdAt: now.toISOString() };
 }
 
+/** An old session position is only edited as metadata, not a new physical anchor. */
+export function updateArtworkDraft(artwork: ArtworkDraft, title: string, position?: Vec3): ArtworkDraft {
+  const name = cleanTitle(title);
+  if (!name) throw new Error("Informe o texto da intervenção.");
+  if (position && !isVec3(position)) throw new Error("Posição inválida.");
+  return { ...artwork, title: name, ...(position ? { sessionPosition: [...position] as Vec3 } : {}) };
+}
+
+export function removeArtworkDraft(place: LabPlace, artworkId: string): LabPlace {
+  if (!place.artworks.some(art => art.id === artworkId)) throw new Error("Intervenção não encontrada.");
+  return { ...place, artworks: place.artworks.filter(art => art.id !== artworkId) };
+}
+
 export function isPlace(value: unknown): value is LabPlace {
   if (typeof value !== "object" || value == null) return false;
   const place = value as Partial<LabPlace>;
   return typeof place.id === "string" && typeof place.title === "string" &&
     typeof place.createdAt === "string" && Array.isArray(place.artworks) &&
     (place.coordinate === undefined || isValidCoordinate(place.coordinate)) &&
+    (place.capture === undefined || (
+      place.capture.kind === "tracking-observation-v1" &&
+      typeof place.capture.capturedAt === "string" &&
+      Number.isFinite(Date.parse(place.capture.capturedAt)) &&
+      (place.capture.quality === "measured-plane" || place.capture.quality === "depth-only") &&
+      typeof place.capture.pathMeters === "number" && Number.isFinite(place.capture.pathMeters) &&
+      place.capture.pathMeters >= 0 &&
+      typeof place.capture.normalTrackingSeconds === "number" &&
+      Number.isFinite(place.capture.normalTrackingSeconds) && place.capture.normalTrackingSeconds >= 0 &&
+      typeof place.capture.planeCount === "number" && Number.isSafeInteger(place.capture.planeCount) &&
+      place.capture.planeCount >= 0 &&
+      typeof place.capture.sampleCount === "number" && Number.isSafeInteger(place.capture.sampleCount) &&
+      place.capture.sampleCount >= 0 &&
+      typeof place.capture.depthAvailable === "boolean"
+    )) &&
     place.artworks.every((item) =>
       item && typeof item.id === "string" && typeof item.title === "string" &&
       (item.kind === "text" || item.kind === "card") && isVec3(item.sessionPosition));

@@ -35,6 +35,16 @@ export const arSession = {
     snapshot = { ...snapshot, artworks: [...snapshot.artworks, artwork] };
     emit();
   },
+  replaceArtwork(artwork: ArtworkDraft) {
+    if (!snapshot.placeId || !snapshot.artworks.some(a => a.id === artwork.id)) return;
+    snapshot = { ...snapshot, artworks: snapshot.artworks.map(a => a.id === artwork.id ? artwork : a) };
+    emit();
+  },
+  removeArtwork(artworkId: string) {
+    if (!snapshot.placeId) return;
+    snapshot = { ...snapshot, artworks: snapshot.artworks.filter(a => a.id !== artworkId) };
+    emit();
+  },
   clear() {
     snapshot = { placeId: null, key: "none", mode: "create", artworks: [] };
     emit();
