@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { isValidCoordinate, type SavedCoordinate } from "../domain/discovery";
+import { isCaptureEvidence, type CaptureEvidence } from "../domain/capture";
 import {
   isPlace, makeArtwork, makePlace, type ArtworkDraft, type ArtworkKind,
   type LabPlace, type Vec3,
@@ -11,8 +12,10 @@ type PlaceStoreValue = {
   places: LabPlace[];
   hydrated: boolean;
   loadError: string | null;
-  createPlace(title: string, coordinate?: SavedCoordinate): Promise<string>;
+  createPlace(title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence): Promise<string>;
   updateCoordinate(placeId: string, coordinate: SavedCoordinate): Promise<void>;
+  updateArtwork(placeId: string, artworkId: string, title: string, position?: Vec3): Promise<ArtworkDraft>;
+  deleteArtwork(placeId: string, artworkId: string): Promise<void>;
   addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3): Promise<ArtworkDraft>;
   deletePlace(placeId: string): Promise<void>;
 };
@@ -59,10 +62,11 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const createPlace = async (title: string, coordinate?: SavedCoordinate) => {
+  const createPlace = async (title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence) => {
     if (!hydrated) throw new Error("Aguarde o carregamento do arquivo local.");
     if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
-    const created = makePlace(title, new Date(), coordinate);
+    if (capture && !isCaptureEvidence(capture)) throw new Error("Registro espacial de captura inválido.");
+    const created = makePlace(title, new Date(), coordinate, capture);
     await save([created, ...current.current]);
     return created.id;
   };
@@ -81,6 +85,36 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     return art;
   };
 
+  const updateArtwork = async (placeId: string, artworkId: string, title: string, position?: Vec3) => {
+    const name = title.trim().replace(/\\s+/g, " ").slice(0, 72);
+    if (!name) throw new Error("Informe o texto da intervenção.");
+    if (position && (position.length !== 3 || !position.every(Number.isFinite))) {
+      throw new Error("Posição inválida.");
+    }
+    const place = current.current.find(p => p.id === placeId);
+    const existing = place?.artworks.find(art => art.id === artworkId);
+    if (!existing) throw new Error("Intervenção não encontrada.");
+    const updated: ArtworkDraft = {
+      ...existing, title: name,
+      ...(position ? { sessionPosition: [...position] as Vec3 } : {}),
+    };
+    const next = current.current.map(p => p.id === placeId
+      ? { ...p, updatedAt: new Date().toISOString(),
+          artworks: p.artworks.map(a => a.id === artworkId ? updated : a) }
+      : p);
+    await save(next);
+    return updated;
+  };
+
+  const deleteArtwork = async (placeId: string, artworkId: string) => {
+    const place = current.current.find(p => p.id === placeId);
+    if (!place?.artworks.some(a => a.id === artworkId)) throw new Error("Intervenção não encontrada.");
+    const next = current.current.map(p => p.id === placeId
+      ? { ...p, updatedAt: new Date().toISOString(),
+          artworks: p.artworks.filter(a => a.id !== artworkId) } : p);
+    await save(next);
+  };
+
   const updateCoordinate = async (placeId: string, coordinate: SavedCoordinate) => {
     if (!isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
     if (!current.current.some((place) => place.id === placeId)) throw new Error("Lugar não encontrado.");
@@ -92,7 +126,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     save(current.current.filter((place) => place.id !== placeId));
 
   return (
-    <Context.Provider value={{ places, hydrated, loadError, createPlace, updateCoordinate, addArtwork, deletePlace }}>
+    <Context.Provider value={{ places, hydrated, loadError, createPlace, updateCoordinate, addArtwork, updateArtwork, deleteArtwork, deletePlace }}>
       {children}
     </Context.Provider>
   );

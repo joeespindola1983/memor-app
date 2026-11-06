@@ -1,4 +1,5 @@
 import type { SavedCoordinate } from "./discovery";
+import type { CaptureEvidence } from "./capture";
 
 // Keep this domain module executable by Node 22 strip-types without a runtime
 // TypeScript import (the Expo mobile bundler resolves extensionless imports).
@@ -30,6 +31,8 @@ export interface LabPlace {
   updatedAt: string;
   artworks: ArtworkDraft[];
   coordinate?: SavedCoordinate;
+  /** Tracking evidence only, not ARWorldMap or cross-session relocalization. */
+  capture?: CaptureEvidence;
 }
 
 export function cleanTitle(value: string): string {
@@ -46,13 +49,15 @@ function qaId(): string {
   return `qa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate): LabPlace {
+export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate,
+  capture?: CaptureEvidence): LabPlace {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Informe um nome para o lugar.");
   if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
   const at = now.toISOString();
   return { id: qaId(), title: normalized, createdAt: at, updatedAt: at, artworks: [],
     ...(coordinate ? { coordinate } : {}),
+    ...(capture ? { capture } : {}),
   };
 }
 
@@ -71,6 +76,12 @@ export function isPlace(value: unknown): value is LabPlace {
   return typeof place.id === "string" && typeof place.title === "string" &&
     typeof place.createdAt === "string" && Array.isArray(place.artworks) &&
     (place.coordinate === undefined || isValidCoordinate(place.coordinate)) &&
+    (place.capture === undefined || (
+      place.capture.kind === "tracking-observation-v1" &&
+      typeof place.capture.capturedAt === "string" &&
+      (place.capture.quality === "measured-plane" || place.capture.quality === "depth-only") &&
+      typeof place.capture.pathMeters === "number" && Number.isFinite(place.capture.pathMeters)
+    )) &&
     place.artworks.every((item) =>
       item && typeof item.id === "string" && typeof item.title === "string" &&
       (item.kind === "text" || item.kind === "card") && isVec3(item.sessionPosition));
