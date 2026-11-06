@@ -7,7 +7,7 @@ import { scanBridge, type VPSNavigator } from "./scanBridge";
  * saved artwork or claim a restorable ARWorldMap. It observes *real* Viro
  * anchors, actual camera movement, depth and tracking quality.
  */
-export default function CaptureScene({ arSceneNavigator }: { arSceneNavigator?: VPSNavigator }) {
+export default function CaptureScene({ arSceneNavigator }: { arSceneNavigator?: VPSNavigator } = {}) {
   const sceneRef = useRef<ViroARScene>(null);
   useEffect(() => {
     if (!arSceneNavigator) return;
