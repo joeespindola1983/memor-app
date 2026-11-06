@@ -108,8 +108,8 @@ public final class MemorWorldMapView: ExpoView, ARSessionDelegate, ARSCNViewDele
     if let id = mapID {
       do {
         configuration.initialWorldMap = try Self.readMap(Self.url(for: id))
-        // Scanning a restored map is opt-in; default is lightweight viewing.
-        configuration.planeDetection = []
+        // Keep plane hit-tests available for placing new works; LiDAR mesh
+        // reconstruction remains disabled except during explicit expansion.
       } catch {
         sendError("Não foi possível abrir o mapa salvo: \(error.localizedDescription)")
         return
