@@ -110,3 +110,24 @@ npx expo run:ios --device
 ```
 
 O iPhone requer ARKit e o Android, dispositivo certificado para ARCore. No iOS, os mapas comuns usam Apple Maps; nenhum token do Supabase é necessário. Não apagar o app QA antigo se quiser manter seus rascunhos.
+
+## POC de relocalização ReactVision VPS (branch `feat/memor-reactvision-vps-poc`)
+
+Veja [`docs/reactvision-vps-qa.md`](docs/reactvision-vps-qa.md). O ReactVision VPS é **opcional**: sem as duas variáveis abaixo, o aplicativo permanece em modo de captura local. Não versionar `.env`.
+
+```bash
+cp .env.example .env
+# Preencha .env com a chave CLIENTE pública recebida no ReactVision Studio e o Project ID correspondente:
+# REACTVISION_CLIENT_KEY=rv_client_...
+# REACTVISION_PROJECT_ID=<Project ID do Studio>
+
+npm install
+npm run typecheck
+npm run test
+npx expo prebuild --clean --platform ios
+npx expo run:ios --device
+```
+
+A configuração é **nativa**: faça um rebuild ao inserir ou alterar Project ID ou chave. A chave de cliente é pública por design, mas **nunca** use uma `rv_secret_` dentro do app.
+
+**Teste:** CRIAR → iniciar mapeamento VPS → aguardar cobertura de keyframes, pares e dispersão → finalizar/hospedar → nomear → abrir RA → esperar `LUGAR RECONHECIDO` → posicionar texto → sair e voltar ao mesmo ambiente. As obras novas têm `locationPosition` relativa à âncora recuperável; obras legadas têm apenas posição da sessão original. O servidor ReactVision guarda a âncora espacial, e somente o sandbox do app QA guarda os textos e o ID. Não há sincronização entre usuários até implementar Supabase.
