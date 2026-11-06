@@ -8,9 +8,9 @@ enum MemorSpatialTrace {
   private static let retainedBytes = 180_000
 
   static func write(_ event: String, fields: [String: Any] = [:]) {
-    let safe = fields.filter { key, value in
-      !["text", "title", "caption", "photoUri", "url", "latitude", "longitude", "key", "token"].contains(key)
-      && JSONSerialization.isValidJSONObject([key: value])
+    let safe = fields.filter { entry in
+      !["text", "title", "caption", "photoUri", "url", "latitude", "longitude", "key", "token"].contains(entry.key)
+      && JSONSerialization.isValidJSONObject([entry.key: entry.value])
     }
     queue.async {
       var entry: [String: Any] = safe
