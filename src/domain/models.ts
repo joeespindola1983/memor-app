@@ -1,4 +1,15 @@
-import { isValidCoordinate, type SavedCoordinate } from "./discovery";
+import type { SavedCoordinate } from "./discovery";
+
+// Keep this domain module executable by Node 22 strip-types without a runtime
+// TypeScript import (the Expo mobile bundler resolves extensionless imports).
+function isValidCoordinate(value: unknown): value is SavedCoordinate {
+  if (!value || typeof value !== "object") return false;
+  const coord = value as Partial<SavedCoordinate>;
+  return typeof coord.latitude === "number" && Number.isFinite(coord.latitude) &&
+    coord.latitude >= -90 && coord.latitude <= 90 &&
+    typeof coord.longitude === "number" && Number.isFinite(coord.longitude) &&
+    coord.longitude >= -180 && coord.longitude <= 180;
+}
 
 export type Vec3 = [number, number, number];
 export type ArtworkKind = "text" | "card";
