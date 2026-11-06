@@ -5,12 +5,15 @@ import { Screen } from "../../src/components/Screen";
 import { ActionButton } from "../../src/components/ActionButton";
 import { PixelLabel } from "../../src/components/PixelLabel";
 import { usePlaces } from "../../src/data/PlaceStore";
+import { useEditorialDrafts } from "../../src/data/EditorialDraftStore";
+import { MemorActionButton } from "../../src/components/MemorUI";
 import { shared, tokens } from "../../src/theme/tokens";
 
 export default function PlaceDetails() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { places, hydrated, deletePlace } = usePlaces();
+  const { removePlaceDrafts } = useEditorialDrafts();
   const [removing, setRemoving] = useState(false);
   const place = places.find((p) => p.id === id);
 
@@ -18,14 +21,18 @@ export default function PlaceDetails() {
     { text: "Cancelar", style: "cancel" },
     { text: "Excluir", style: "destructive", onPress: async () => {
       setRemoving(true);
-      try { await deletePlace(String(id)); router.replace("/"); }
-      catch { Alert.alert("Falha", "Não foi possível remover o local."); setRemoving(false); }
+      try {
+        await deletePlace(String(id));
+        try { await removePlaceDrafts(String(id)); }
+        catch { Alert.alert("Atenção","Lugar removido, mas a limpeza dos rascunhos editoriais locais falhou."); }
+        router.replace("/(tabs)/archive");
+      } catch { Alert.alert("Falha", "Não foi possível remover o local."); setRemoving(false); }
     }},
   ]);
 
   if (!place) {
     return <Screen><View style={{ padding: 24, gap: 24 }}>
-      <Pressable onPress={() => router.replace("/")}><PixelLabel>‹ ARQUIVO</PixelLabel></Pressable>
+      <Pressable onPress={() => router.replace("/(tabs)/archive")}><PixelLabel>‹ ARQUIVO</PixelLabel></Pressable>
       <Text style={shared.h2}>{hydrated ? "Lugar não encontrado" : "Carregando lugar..."}</Text>
     </View></Screen>;
   }
@@ -74,6 +81,12 @@ export default function PlaceDetails() {
               </View>
             </View>
           ))}
+        </View>
+        <View style={{gap:9}}>
+          <PixelLabel>ORGANIZAR POR COLEÇÃO</PixelLabel>
+          <Text style={shared.secondary}>Escolha uma intervenção de texto para associar a um destino editorial privado. Nenhuma obra será enviada.</Text>
+          <MemorActionButton label="ORGANIZAR INTERVENÇÃO" onPress={() =>
+            router.push({pathname:"/editorial/[id]",params:{id:place.id}})} outline />
         </View>
         <Pressable disabled={removing} accessibilityRole="button" onPress={remove}>
           <Text style={{ color: "#A23D34", fontSize: 13, textAlign: "center", padding: 14 }}>
