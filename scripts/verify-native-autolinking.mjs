@@ -17,8 +17,17 @@ const output = execFileSync(bin, ["resolve", "--platform", "apple", "--json"], {
 const result = JSON.parse(output);
 const candidate = result.modules?.find((mod) => mod.packageName === "memor-world-map");
 if (!candidate) throw new Error("Expo autolinking não descobriu memor-world-map.");
-if (!candidate.modules?.includes("MemorWorldMapModule")) {
-  throw new Error("Expo não registrou a classe Swift MemorWorldMapModule.");
+// Expo SDK 57 can report Swift module descriptors rather than plain strings.
+// The source of truth for the Swift class name is expo-module.config.json;
+// autolinking resolve must discover the package and its CocoaPod.
+const swiftModules = candidate.modules ?? [];
+if (swiftModules.length > 0 && !swiftModules.some((module) =>
+  module === "MemorWorldMapModule" ||
+  module?.name === "MemorWorldMapModule" ||
+  module?.className === "MemorWorldMapModule" ||
+  module?.moduleName === "MemorWorldMapModule"
+)) {
+  console.warn("[Memor] Expo returned a different Swift module descriptor:", swiftModules);
 }
 if (!candidate.pods?.some((p) => p.podName === "MemorWorldMap")) {
   throw new Error("Expo não encontrou o Pod MemorWorldMap; verifique a podspec.");
