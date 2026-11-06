@@ -22,14 +22,16 @@ export default function PlaceDetails() {
   const place = places.find(p => p.id === id);
 
   function remove() {
+    if (!place) return;
+    const worldMapID = place.worldMap?.id;
     Alert.alert("Excluir este lugar?", "Este lugar e suas intervenções serão removidos deste aparelho. Se estiver publicado, sua exclusão remota deverá ser sincronizada separadamente.", [
       { text: "Cancelar", style: "cancel" },
       { text: "Excluir do aparelho", style: "destructive", onPress: async () => {
         setRemoving(true);
         try {
           await deletePlace(String(id));
-          if (place.worldMap) {
-            try { await worldMapNative?.removeMap(place.worldMap.id); }
+          if (worldMapID) {
+            try { await worldMapNative?.removeMap(worldMapID); }
             catch (error) { if (__DEV__) console.warn("[Memor] Native map cleanup", error); }
           }
           try {
