@@ -92,3 +92,39 @@ Do not merge to release until physical tests pass.
 
 Historical `reactvision-vps-qa.md` is for old experiments, not the new
 production architecture.
+
+
+## Important: rebuild the native iPhone app after the module registration fix
+
+The Expo Modules registry must include `MemorWorldMapModule` and the CocoaPod
+`MemorWorldMap`. A successful TypeScript check alone does not guarantee this.
+
+```bash
+git fetch origin
+git switch feat/memor-offline-worldmap
+git pull --ff-only
+npm install
+
+# Fails if Expo cannot find the Swift module class AND its CocoaPod.
+npm run native:check
+npm run typecheck
+npm run test
+
+# Recreates the native Xcode project and reinstalls pods.
+npx expo prebuild --clean --platform ios
+# Compile AND install a NEW development build on the connected iPhone.
+npx expo run:ios --device
+```
+
+`expo start` (or Metro hot reload) **cannot add a Swift module to an
+already installed iOS binary**. A prebuild only generates the native
+project; an installed device build is still required.
+
+If debugging a `Cannot find native module 'MemorWorldMap'` error, inspect
+`ios/Podfile.lock` for `MemorWorldMap` and regenerate pods if missing.
+The `expo-module.config.json` registration uses `apple.modules`, not
+`ios.modules`.
+
+The JS shim intentionally returns null when an older development client is
+running, and the iOS capture screen displays an actionable rebuild message
+rather than silently falling back to a non-persistent Viro session.
