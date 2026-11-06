@@ -127,7 +127,9 @@ export default function NameCapturedPlace() {
           onPress={() => void save()}
           disabled={!hydrated || !!loadError || saving || !cleanTitle(name)} />
         <Text style={[editorial.muted, { fontSize: 12 }]}>
-          O lugar e suas intervenções continuam privados neste aparelho.
+          {hosted
+            ? "Uma referência visual do ambiente foi enviada para permitir futuras visitas. Suas palavras não foram publicadas."
+            : "Este cadastro foi salvo somente neste aparelho."}
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
