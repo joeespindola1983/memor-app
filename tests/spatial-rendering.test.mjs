@@ -22,9 +22,9 @@ test("photos suspend ARKit while native system camera owns the lens", () => {
   assert.match(swift, /func resumeAfterPhoto/);
   assert.match(swift, /func placePhoto/);
   assert.match(swift, /memor\.photo\./);
-  assert.match(ui, /await native\.current\.pauseForPhoto\(\)/);
+  assert.match(ui, /await camera\.pauseForPhoto\(\)/);
   assert.match(ui, /ImagePicker\.launchCameraAsync/);
-  assert.match(ui, /await native\.current\.resumeAfterPhoto\(\)/);
+  assert.match(ui, /await camera\.resumeAfterPhoto\(\)/);
   assert.match(ui, /await native\.current\.placePhoto/);
   assert.match(ui, /addArtwork\(place\.id, "photo"/);
 });
