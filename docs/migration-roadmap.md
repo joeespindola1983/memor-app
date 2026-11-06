@@ -24,7 +24,7 @@
 |---|---|---|---|
 | 0 — Laboratório de RA | Expo 57, ViroReact 3.0.3; criação e visualização de texto/cartão na **mesma sessão** | iPhone físico confirmou criação/visualização; build Android compatível pendente | **Validado no iOS; QA Android pendente** |
 | 1 — Navegação, visual e domínio | Tokens Figma/SwiftUI, Header, Mapa, Arquivo, Criar, Eu, coleções, rascunhos editoriais locais, localização opt-in | Navegar sem telas inertes; rascunhos só por obra existente; filtros não inventam conteúdo; teste de navegação em iOS/Android | **Em implementação nesta branch** |
-| 2 — Capture/Place v2 | Fluxos separados para cadastrar local, reconhecer, editar/intervenções; estados de tracking/erro, excluir captura; persistência local versionada | Captura/visualização com reinício e descarte íntegro; tracking confiável | **Não iniciado** |
+| 2 — Capture/Place v2 | Varredura Viro, nomeação com RA desmontada, cadastro, edição/exclusão de obras; relocalização espacial ainda requer serviço | QA físico de tracking/edição; persistência do mapa depende de VPS | **Primeiro incremento na branch feat/memor-capture-edit-flow; QA e VPS pendentes** |
 | 3 — Mídia e UX artística | Fotografia real, preview, galeria, estandes, texto, redimensionamento; gerência de câmera e sessões | Foto/nomeamento preservados; RA pausa antes da câmera nativa; recaptura e exclusão testadas | **Não iniciado** |
 | 4 — Relocalização multiplataforma | `SpatialLocalizationProvider`; avaliar Viro Cloud Anchors / VPS, TTL, preço, limites e privacidade; âncoras relativas à origem compartilhada | iPhone cria → Android reconhece → volta outro dia, com erro e tempo medidos | **Pesquisa / POC pendente** |
 | 5 — Persistência e sincronização | Clientes Supabase, auth única, esquemas e RLS compatíveis, backup privado vs publicação; migrações aprovadas | E2E dois usuários: isolamento privado, exclusão e revisão editorial validadas | **Não iniciado** |
@@ -64,3 +64,11 @@ npx expo run:ios --device
 ```
 
 **Após adicionar módulos nativos (`react-native-maps`, `expo-location`), reconstruir o app**, não apenas recarregar Metro. No Android, Google Maps requer chave própria de Maps SDK no build; nunca versionar chave sem restrições. O laboratório AR continua dependente de dispositivo físico certificado.
+
+## Entrega M2 — status preciso
+
+- Implementado: fluxo de captura por observação, coleta de tracking/plano/depth, nomeação sem câmera, catálogo local, criação/visualização de textos e cartões QA, reposicionamento de obra da sessão atual, edição de metadados e exclusão por obra/lugar.
+- Sem promessa de relocalização: `CaptureEvidence.kind=tracking-observation-v1` não contém `ARWorldMap`, imagem de referência ou VPS; seu objetivo é preservar sinais de qualidade e testar o UX multiplataforma.
+- Em espera: varredura 3D persistente, importação de mapas antigos, sincronização, fotografia real e revisita cruzada iOS/Android.
+- O contrato `SpatialLocalizationProvider` está documentado no código, e a implementação padrão rejeita tentar capturar/resolver âncoras sem provedor configurado.
+- Critérios e logs para testar: [docs/capture-edit-qa.md](capture-edit-qa.md).

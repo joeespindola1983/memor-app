@@ -91,3 +91,22 @@ A branch `feat/memor-product-migration-foundation` migra as telas principais e o
 O mapa usa **Apple Maps no iOS** e **Google Maps SDK no Android**. Para mapas Android, configure uma chave restrita via `EXPO_ANDROID_MAPS_API_KEY` durante o build. A criação e visualização AR continuam restritas a dispositivos compatíveis com ARKit/ARCore.
 
 Novos módulos nativos (`react-native-maps`, `expo-location`) exigem recompilação do app, não apenas reload do Metro. Dados locais continuam isolados deste Memor QA.
+
+## M2 — Captura guiada e edição (QA)
+
+A branch `feat/memor-capture-edit-flow` adiciona a jornada **CRIAR → varredura com tracking → nomear sem câmera → lugar salvo → criar/visualizar em RA → editar/excluir obra no Arquivo**.
+
+**Use [o checklist de amanhã](docs/capture-edit-qa.md).** Depois de abrir a RA, os textos e cartões podem ser posicionados e movidos na mesma sessão. O novo fluxo grava *metadados diagnósticos* da varredura, nunca um `ARWorldMap` recuperável. Ao reabrir, a pose 3D antiga não é exibida até que exista um provedor real de relocalização (VPS/Cloud Anchor).
+
+```bash
+git fetch origin
+git switch feat/memor-capture-edit-flow
+npm install
+npm run test
+npm run typecheck
+npx expo install --check
+npx expo prebuild --clean --platform ios
+npx expo run:ios --device
+```
+
+O iPhone requer ARKit e o Android, dispositivo certificado para ARCore. No iOS, os mapas comuns usam Apple Maps; nenhum token do Supabase é necessário. Não apagar o app QA antigo se quiser manter seus rascunhos.

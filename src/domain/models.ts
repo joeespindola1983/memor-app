@@ -92,8 +92,17 @@ export function isPlace(value: unknown): value is LabPlace {
     (place.capture === undefined || (
       place.capture.kind === "tracking-observation-v1" &&
       typeof place.capture.capturedAt === "string" &&
+      Number.isFinite(Date.parse(place.capture.capturedAt)) &&
       (place.capture.quality === "measured-plane" || place.capture.quality === "depth-only") &&
-      typeof place.capture.pathMeters === "number" && Number.isFinite(place.capture.pathMeters)
+      typeof place.capture.pathMeters === "number" && Number.isFinite(place.capture.pathMeters) &&
+      place.capture.pathMeters >= 0 &&
+      typeof place.capture.normalTrackingSeconds === "number" &&
+      Number.isFinite(place.capture.normalTrackingSeconds) && place.capture.normalTrackingSeconds >= 0 &&
+      typeof place.capture.planeCount === "number" && Number.isSafeInteger(place.capture.planeCount) &&
+      place.capture.planeCount >= 0 &&
+      typeof place.capture.sampleCount === "number" && Number.isSafeInteger(place.capture.sampleCount) &&
+      place.capture.sampleCount >= 0 &&
+      typeof place.capture.depthAvailable === "boolean"
     )) &&
     place.artworks.every((item) =>
       item && typeof item.id === "string" && typeof item.title === "string" &&
