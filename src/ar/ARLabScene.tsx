@@ -39,7 +39,7 @@ function ArtworkVisual({ item, position }: { item: ArtworkDraft; position: Vec3 
   );
 }
 
-export default function ARLabScene({ arSceneNavigator }: { arSceneNavigator?: any }) {
+export default function ARLabScene({ arSceneNavigator }: { arSceneNavigator?: any } = {}) {
   const sceneRef = useRef<ViroARScene>(null);
   const session = useARSession();
   const { places } = usePlaces();
