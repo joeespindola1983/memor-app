@@ -29,9 +29,9 @@ Branch: `feat/memor-offline-worldmap`. Expo/React Native + módulo Swift ARKit.
 | Reconhecer | `tracking.changed` (`localized: true`) |
 | Adicionar texto | `rn.text.started`, `text.anchor.adding` |
 | Texto persistido | `text.anchor.saved`, `rn.artwork.metadata.saved` |
-| Texto visível | `render.anchor.attached`, `render.visible` |
+| Texto visível | `render.anchor.attached`, `render.node.attached` |
 | Fotografia | `photo.camera.paused`, `rn.photo.camera.captured`, `photo.camera.resuming` |
-| Fixar fotografia | `photo.anchor.added`, `photo.anchor.saved`, `render.visible` |
+| Fixar fotografia | `photo.anchor.added`, `photo.anchor.saved`, `render.node.attached` |
 | Erros | `*.failed`, `render.metadata.missing`, `render.asset.unavailable` |
 
 Os logs `[Memor][Spatial]` aparecem no Xcode. Os `[Memor][RN]` aparecem no Metro/Xcode. O arquivo `Documents/MemorLogs/spatial.jsonl` persiste entre aberturas do app e é compartilhado com **Exportar histórico de depuração**.
