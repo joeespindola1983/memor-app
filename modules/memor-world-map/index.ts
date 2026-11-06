@@ -39,9 +39,9 @@ type WorldMapModule = {
 };
 
 export const MemorWorldMapView =
-  (Platform.OS === "ios" ? requireNativeViewManager("MemorWorldMap") : null)
-  as ComponentType<WorldMapViewProps> | null;
+  (Platform.OS === "ios" ? requireNativeViewManager("MemorWorldMap") : null) as
+    ComponentType<WorldMapViewProps> | null;
 
 export const worldMapNative =
-  (Platform.OS === "ios" ? requireNativeModule("MemorWorldMap") : null)
-  as WorldMapModule | null;
+  (Platform.OS === "ios" ? requireNativeModule("MemorWorldMap") : null) as
+    WorldMapModule | null;
