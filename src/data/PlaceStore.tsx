@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { isValidCoordinate, type SavedCoordinate } from "../domain/discovery";
 import { isCaptureEvidence, type CaptureEvidence } from "../domain/capture";
+import { isHostedVPSAnchor, type HostedVPSAnchor } from "../domain/cloudAnchor";
 import {
   isPlace, makeArtwork, makePlace, updateArtworkDraft, removeArtworkDraft,
   type ArtworkDraft, type ArtworkKind,
@@ -13,11 +14,11 @@ type PlaceStoreValue = {
   places: LabPlace[];
   hydrated: boolean;
   loadError: string | null;
-  createPlace(title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence): Promise<string>;
+  createPlace(title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor): Promise<string>;
   updateCoordinate(placeId: string, coordinate: SavedCoordinate): Promise<void>;
-  updateArtwork(placeId: string, artworkId: string, title: string, position?: Vec3): Promise<ArtworkDraft>;
+  updateArtwork(placeId: string, artworkId: string, title: string, position?: Vec3, locationPosition?: Vec3): Promise<ArtworkDraft>;
   deleteArtwork(placeId: string, artworkId: string): Promise<void>;
-  addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3): Promise<ArtworkDraft>;
+  addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3): Promise<ArtworkDraft>;
   deletePlace(placeId: string): Promise<void>;
 };
 const Context = createContext<PlaceStoreValue | null>(null);
@@ -63,20 +64,25 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const createPlace = async (title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence) => {
+  const createPlace = async (title: string, coordinate?: SavedCoordinate, capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor) => {
     if (!hydrated) throw new Error("Aguarde o carregamento do arquivo local.");
     if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
     if (capture && !isCaptureEvidence(capture)) throw new Error("Registro espacial de captura inválido.");
-    const created = makePlace(title, new Date(), coordinate, capture);
+    if (cloudAnchor && !isHostedVPSAnchor(cloudAnchor)) throw new Error("Âncora VPS inválida.");
+    const created = makePlace(title, new Date(), coordinate, capture, cloudAnchor);
     await save([created, ...current.current]);
     return created.id;
   };
 
-  const addArtwork = async (placeId: string, kind: ArtworkKind, title: string, position: Vec3) => {
-    const art = makeArtwork(kind, title, position);
-    if (!current.current.some((place) => place.id === placeId)) {
-      throw new Error("Este lugar não está mais salvo.");
+  const addArtwork = async (placeId: string, kind: ArtworkKind, title: string, position: Vec3, locationPosition?: Vec3) => {
+    const place = current.current.find((item) => item.id === placeId);
+    if (!place) throw new Error("Este lugar não está mais salvo.");
+    if (place.cloudAnchor && !locationPosition) {
+      throw new Error("É preciso reconhecer a âncora VPS antes de salvar uma nova obra.");
     }
+    if (!place.cloudAnchor && locationPosition) throw new Error("Este lugar não possui âncora VPS.");
+    const art = makeArtwork(kind, title, position, new Date(), place.cloudAnchor && locationPosition
+      ? { position: locationPosition, anchorId: place.cloudAnchor.cloudAnchorId } : undefined);
     const next = current.current.map((place) =>
       place.id === placeId
         ? { ...place, artworks: [...place.artworks, art], updatedAt: art.createdAt }
@@ -86,11 +92,12 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     return art;
   };
 
-  const updateArtwork = async (placeId: string, artworkId: string, title: string, position?: Vec3) => {
+  const updateArtwork = async (placeId: string, artworkId: string, title: string, position?: Vec3, locationPosition?: Vec3) => {
     const place = current.current.find(p => p.id === placeId);
     const existing = place?.artworks.find(art => art.id === artworkId);
     if (!existing) throw new Error("Intervenção não encontrada.");
-    const updated = updateArtworkDraft(existing, title, position);
+    if (place?.cloudAnchor && position && !locationPosition) throw new Error("É preciso resolver a âncora para mover a obra.");
+    const updated = updateArtworkDraft(existing, title, position, locationPosition);
     const next = current.current.map(p => p.id === placeId
       ? { ...p, updatedAt: new Date().toISOString(),
           artworks: p.artworks.map(a => a.id === artworkId ? updated : a) }

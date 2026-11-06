@@ -110,3 +110,43 @@ npx expo run:ios --device
 ```
 
 O iPhone requer ARKit e o Android, dispositivo certificado para ARCore. No iOS, os mapas comuns usam Apple Maps; nenhum token do Supabase é necessário. Não apagar o app QA antigo se quiser manter seus rascunhos.
+
+## POC de relocalização ReactVision VPS (branch `feat/memor-reactvision-vps-poc`)
+
+Veja [`docs/reactvision-vps-qa.md`](docs/reactvision-vps-qa.md). O ReactVision VPS é **opcional**: sem a chave pública de cliente no ambiente, o aplicativo permanece em modo de captura local. O Project ID já está configurado no código. Não versionar `.env`.
+
+```bash
+cp -n .env.example .env  # não sobrescreve um .env existente
+# Preencha no .env apenas a chave pública de cliente do mesmo projeto:
+# REACTVISION_CLIENT_KEY=rv_client_...
+# REACTVISION_PROJECT_ID já tem valor padrão; só altere para outro projeto
+
+npm install
+npm run typecheck
+npm run test
+npx expo prebuild --clean --platform ios
+npx expo run:ios --device
+```
+
+A configuração é **nativa**: faça um rebuild ao inserir ou alterar Project ID ou chave. A chave de cliente é pública por design, mas **nunca** use uma `rv_secret_` dentro do app.
+
+**Teste:** CRIAR → iniciar mapeamento VPS → aguardar cobertura de keyframes, pares e dispersão → finalizar/hospedar → nomear → abrir RA → esperar `LUGAR RECONHECIDO` → posicionar texto → sair e voltar ao mesmo ambiente. As obras novas têm `locationPosition` relativa à âncora recuperável; obras legadas têm apenas posição da sessão original. O servidor ReactVision guarda a âncora espacial, e somente o sandbox do app QA guarda os textos e o ID. Não há sincronização entre usuários até implementar Supabase.
+
+### Diagnóstico obrigatório após configurar a chave
+
+O build QA precisa mostrar **VPS QA** no cabeçalho. Se mostrar **LOCAL**, a câmera não está usando Cloud Anchors e a revisita não é recuperável, mesmo que textos possam ser posicionados normalmente.
+
+```bash
+# No repositório do memor-app, após preencher .env:
+npm run vps:doctor                 # não mostra a chave
+npm run typecheck
+npm run test
+npx expo prebuild --clean --platform ios
+npm run vps:doctor                 # também checa Info.plist gerado
+# Encerre qualquer Metro antigo; depois:
+npx expo start --dev-client --lan --clear
+# Em outro terminal:
+npx expo run:ios --device --no-bundler
+```
+
+**Não basta criar um lugar:** para relocalizar, entre em CRIAR → **INICIAR MAPEAMENTO VPS** → **FINALIZAR E HOSPEDAR VPS**. Só um registro com `cloudAnchorId` e obras criadas **depois do reconhecimento** pode ser recuperado. Lugares criados antes do VPS não contêm mapa hospedado e não são migrados automaticamente.

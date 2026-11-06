@@ -72,3 +72,11 @@ npx expo run:ios --device
 - Em espera: varredura 3D persistente, importação de mapas antigos, sincronização, fotografia real e revisita cruzada iOS/Android.
 - O contrato `SpatialLocalizationProvider` está documentado no código, e a implementação padrão rejeita tentar capturar/resolver âncoras sem provedor configurado.
 - Critérios e logs para testar: [docs/capture-edit-qa.md](capture-edit-qa.md).
+
+## Experimento VPS de custo controlado (2026-11-06)
+
+Na branch `feat/memor-reactvision-vps-poc`, passamos a chamar diretamente as APIs nativas `startScan`, `getScanStatus`, `finishScan` e `ViroARCloudAnchor` de ViroReact 3.0.3, **somente** quando a chave CLIENTE e o Project ID do ReactVision estiverem configurados. Nenhum `rv_secret_` entra no app.
+
+Contrato de armazenamento: ReactVision hospeda a âncora visual; `LabPlace.cloudAnchor` guarda ID + frame token + TTL, e `ArtworkDraft.locationPosition` guarda metros relativos ao frame (convertidos do raycast por `worldToLocation`). Isso permite revisitas no mesmo dispositivo, sujeitas à qualidade do reconhecimento. Para outro aparelho enxergar **também as obras**, teremos de enviar os registros autorizados via Supabase; o protótipo não faz isso.
+
+TTL inicial de 7 dias (configurável), sujeito à política e às cotas do Studio. Não capturamos fotos nem snapshots da malha. A ação de upload é explícita. Confira `docs/reactvision-vps-qa.md` para QA e verificações antes de prometer relocalização estável.

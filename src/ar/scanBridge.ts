@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from "react";
 import {
-  initialScan, makeCaptureEvidence, scanIsReady, type CaptureEvidence,
+  initialScan, makeCaptureEvidence, makeHostedCaptureEvidence, scanIsReady, type CaptureEvidence,
   type ScanProgress,
 } from "../domain/capture";
 import { isVec3 } from "./hitTest";
 import type { Vec3 } from "../domain/models";
+import type { HostedVPSAnchor, NativeScanStatus } from "../domain/cloudAnchor";
 
 let status: ScanProgress = initialScan;
 let lastCamera: Vec3 | null = null;
@@ -15,6 +16,35 @@ let runID = 0;
 const anchors = new Set<string>();
 const listeners = new Set<() => void>();
 let pendingCapture: CaptureEvidence | null = null;
+let pendingAnchor: HostedVPSAnchor | null = null;
+
+/** Exact subset of the ViroARSceneNavigator scene-injected API (3.0.3).
+ * Calls must use the navigator supplied to CaptureScene, NOT a ViroARScene ref.
+ */
+export type VPSNavigator = {
+  startScan(): void;
+  finishScan(ttlDays?: number): Promise<{
+    success: boolean;
+    cloudAnchorId?: string;
+    locationTransform?: string;
+    error?: string;
+    diagnostics?: {
+      valid: boolean;
+      keyframes?: number;
+      triangulatedPoints?: number;
+      viewpointPairs?: number;
+      spreadMeters?: number;
+      minPoints?: number;
+      minViewpointPairs?: number;
+      minSpreadMeters?: number;
+    };
+  }>;
+  getScanStatus(): Promise<NativeScanStatus>;
+  cancelCloudAnchorOperations(): void;
+};
+
+let nav: VPSNavigator | null = null;
+
 
 function emit(next: ScanProgress) {
   if (next === status) return;
@@ -32,10 +62,34 @@ export const scanBridge = {
     accumulatedNormalMs = 0;
     anchors.clear();
     pendingCapture = null;
+    pendingAnchor = null;
     emit({ ...initialScan });
     return runID;
   },
   getRunID() { return runID; },
+  registerVPSNavigator(next: VPSNavigator) {
+    nav = next;
+    return () => {
+      if (nav === next) {
+        nav = null;
+      }
+    };
+  },
+  startVPS() {
+    if (!nav) throw new Error("A cena VPS ainda não está pronta.");
+    nav.startScan();
+  },
+  async getVPSStatus(): Promise<NativeScanStatus> {
+    if (!nav) return { available: false, error: "A câmera VPS não está pronta." };
+    return nav.getScanStatus();
+  },
+  async finishVPS(ttlDays = 7) {
+    if (!nav) throw new Error("A câmera VPS não está pronta.");
+    return nav.finishScan(ttlDays);
+  },
+  cancelVPS() {
+    try { nav?.cancelCloudAnchorOperations(); } catch { /* native already unmounted */ }
+  },
   getSnapshot: () => status,
   subscribe(listener: () => void) {
     listeners.add(listener);
@@ -83,13 +137,15 @@ export const scanBridge = {
     emit({ ...status, normalTrackingSeconds: seconds, pathMeters, sampleCount: status.sampleCount+1 });
   },
   canFinish() { return scanIsReady(status); },
-  finish(): CaptureEvidence {
-    const evidence = makeCaptureEvidence(status);
+  finish(cloudAnchor?: HostedVPSAnchor): CaptureEvidence {
+    const evidence = cloudAnchor ? makeHostedCaptureEvidence(status) : makeCaptureEvidence(status);
     pendingCapture = evidence;
+    pendingAnchor = cloudAnchor ?? null;
     return evidence;
   },
   takePending(): CaptureEvidence | null { return pendingCapture; },
-  clearPending() { pendingCapture = null; },
+  takePendingAnchor(): HostedVPSAnchor | null { return pendingAnchor; },
+  clearPending() { pendingCapture = null; pendingAnchor = null; },
 };
 
 export function useScanProgress() {

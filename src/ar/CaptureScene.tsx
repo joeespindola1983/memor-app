@@ -1,18 +1,18 @@
 import { useEffect, useRef } from "react";
 import { ViroARScene, ViroTrackingStateConstants } from "@reactvision/react-viro";
-import { scanBridge } from "./scanBridge";
+import { scanBridge, type VPSNavigator } from "./scanBridge";
 
 /**
  * Tracking-only capture scene. Unlike ARLabScene, this scene does not mount any
  * saved artwork or claim a restorable ARWorldMap. It observes *real* Viro
  * anchors, actual camera movement, depth and tracking quality.
  */
-export default function CaptureScene() {
+export default function CaptureScene({ arSceneNavigator }: { arSceneNavigator?: VPSNavigator } = {}) {
   const sceneRef = useRef<ViroARScene>(null);
   useEffect(() => {
-    // CaptureScene owns no AR native resources outside ViroARScene.
-    return () => { sceneRef.current = null; };
-  }, []);
+    if (!arSceneNavigator) return;
+    return scanBridge.registerVPSNavigator(arSceneNavigator);
+  }, [arSceneNavigator]);
   return (
     <ViroARScene
       ref={sceneRef}

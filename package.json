@@ -10,7 +10,9 @@
     "prebuild": "expo prebuild",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
-    "deps:check": "npm ls react react-dom --depth=0"
+    "deps:check": "npm ls react react-dom --depth=0",
+    "vps:doctor": "node scripts/vps-doctor.mjs",
+    "pretest": "npm run typecheck"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -34,7 +36,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.10",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "@types/node": "^22.15.0"
   },
   "type": "module",
   "engines": {

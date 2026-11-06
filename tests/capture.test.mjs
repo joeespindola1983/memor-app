@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initialScan, scanIsReady, scanInstruction, makeCaptureEvidence, isCaptureEvidence, transitionCapture } from "../src/domain/capture.ts";
+import { initialScan, scanIsReady, scanInstruction, makeCaptureEvidence, makeHostedCaptureEvidence, isCaptureEvidence, transitionCapture } from "../src/domain/capture.ts";
 
 test("capture requires tracking, genuine spatial motion and a measured reference", () => {
   const ready = {...initialScan,tracking:"ready",normalTrackingSeconds:4,pathMeters:0.4,planeCount:1,sampleCount:9};
@@ -37,4 +37,13 @@ test("QA scan never masquerades as a durable spatial anchor", async () => {
   await assert.rejects(unavailableSpatialProvider.resolvePlace({
     provider:"reactvision-vps",placeID:"qa-test",anchorID:"fake",createdAt:new Date().toISOString(),
   }), SpatialNotConfiguredError);
+});
+test("successful VPS hosting does not require an ARPlane from the local heuristic", () => {
+  const progress={...initialScan,tracking:"ready",normalTrackingSeconds:6,
+    pathMeters:0.45,planeCount:0,depthAvailable:false,sampleCount:17};
+  const evidence=makeHostedCaptureEvidence(progress);
+  assert.equal(scanIsReady(progress),false);
+  assert.equal(evidence.quality,"vps-hosted");
+  assert.equal(isCaptureEvidence(evidence),true);
+  assert.equal(makeHostedCaptureEvidence({...progress,tracking:"limited"}).quality,"vps-hosted");
 });
