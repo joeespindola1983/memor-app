@@ -1,4 +1,4 @@
-import type { SavedCoordinate } from "./discovery";
+import { isValidCoordinate, type SavedCoordinate } from "./discovery";
 
 export type Vec3 = [number, number, number];
 export type ArtworkKind = "text" | "card";
@@ -38,6 +38,7 @@ function qaId(): string {
 export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate): LabPlace {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Informe um nome para o lugar.");
+  if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
   const at = now.toISOString();
   return { id: qaId(), title: normalized, createdAt: at, updatedAt: at, artworks: [],
     ...(coordinate ? { coordinate } : {}),
@@ -58,6 +59,7 @@ export function isPlace(value: unknown): value is LabPlace {
   const place = value as Partial<LabPlace>;
   return typeof place.id === "string" && typeof place.title === "string" &&
     typeof place.createdAt === "string" && Array.isArray(place.artworks) &&
+    (place.coordinate === undefined || isValidCoordinate(place.coordinate)) &&
     place.artworks.every((item) =>
       item && typeof item.id === "string" && typeof item.title === "string" &&
       (item.kind === "text" || item.kind === "card") && isVec3(item.sessionPosition));

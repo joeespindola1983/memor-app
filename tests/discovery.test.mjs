@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makePlace, makeArtwork } from "../src/domain/models.ts";
+import { makePlace, makeArtwork, isPlace } from "../src/domain/models.ts";
 import { isValidCoordinate, distanceMeters, nearbyPlaces, savedPlacesCatalog } from "../src/domain/discovery.ts";
 
 const origin={latitude:-15.8,longitude:-47.9};
@@ -23,4 +23,11 @@ test("map shows only local geolocated places containing a real text artwork", ()
   c.artworks.push(makeArtwork("text","fora do raio",[0,0,-1]));
   assert.deepEqual(nearbyPlaces([a,b,c],origin).map(x=>x.place.id),[a.id]);
   assert.equal(savedPlacesCatalog([a,b,c]).length,3);
+});
+
+test("invalid stored place coordinates cannot enter the catalog", () => {
+  assert.throws(() => makePlace("N",new Date(),{latitude:101,longitude:0}), /Coordenadas inválidas/);
+  const p=makePlace("A");
+  assert.equal(isPlace({...p,coordinate:{latitude:NaN,longitude:0}}),false);
+  assert.equal(isPlace(p),true);
 });
