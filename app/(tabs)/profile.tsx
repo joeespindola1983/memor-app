@@ -18,7 +18,7 @@ export default function ProfileScreen() {
       <View style={{paddingTop:6,gap:16}}>
         <PixelLabel>EU · ARQUIVO PESSOAL</PixelLabel>
         <Text style={[editorial.heading,{fontSize:39,letterSpacing:-1}]}>Minha cidade,{"\n"}minhas memórias.</Text>
-        <Text style={editorial.muted}>O que você cria neste protótipo está salvo somente neste aparelho QA.</Text>
+        <Text style={editorial.muted}>Suas memórias e intervenções ficam guardadas neste aparelho.</Text>
       </View>
       <MemorSection eyebrow={`${places.length} LUGARES REGISTRADOS`}>
         {places.length===0 ? <Text style={editorial.muted}>Nenhum lugar cadastrado ainda.</Text>:
