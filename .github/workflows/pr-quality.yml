@@ -1,0 +1,36 @@
+name: Memor PR quality gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+      - name: React peer dependencies
+        run: npm run deps:check
+      - name: Unit tests
+        run: npm run test
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Expo dependency compatibility
+        run: npx expo install --check
