@@ -18,12 +18,21 @@ import { arSession, useARSession } from "../../src/ar/session";
 import { usePlaces } from "../../src/data/PlaceStore";
 import type { Vec3 } from "../../src/domain/models";
 import { tokens } from "../../src/theme/tokens";
+import { WorldMapExperience } from "../../src/components/WorldMapExperience";
 
 /** Figma: Pages 04.03/04.05 + Template ARExperience (105:464).
  * The entire camera is the canvas, not a diagnostic dashboard. All cloud
  * localization and world-to-location conversion remain intact.
  */
 export default function ARExperience() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { places } = usePlaces();
+  const nativePlace = places.find(p => p.id === id);
+  if (Platform.OS === "ios" && nativePlace?.worldMap) return <WorldMapExperience place={nativePlace} />;
+  return <LegacyARExperience />;
+}
+
+function LegacyARExperience() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();

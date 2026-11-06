@@ -1,3 +1,4 @@
+import ARKit
 import ExpoModulesCore
 
 public final class MemorWorldMapModule: Module {
@@ -12,24 +13,22 @@ public final class MemorWorldMapModule: Module {
       Prop("markersJSON") { (view: MemorWorldMapView, value: String?) in
         view.setMarkers(json: value ?? "[]")
       }
-    }
-
-    AsyncFunction("saveMap") { (promise: Promise) in
-      DispatchQueue.main.async {
-        guard let view = MemorWorldMapView.active else {
-          promise.reject("ERR_NO_CAMERA", "A câmera ARKit não está aberta.")
-          return
-        }
+      AsyncFunction("saveMap") { (view: MemorWorldMapView, promise: Promise) in
         view.saveMap(promise: promise)
       }
-    }
-
-    AsyncFunction("placeText") { (id: String, title: String, promise: Promise) in
-      DispatchQueue.main.async {
-        guard let view = MemorWorldMapView.active else {
-          promise.reject("ERR_NO_CAMERA", "A câmera ARKit não está aberta.")
-          return
-        }
+      AsyncFunction("beginExpansion") { (view: MemorWorldMapView, promise: Promise) in
+        view.beginExpansion(promise: promise)
+      }
+      AsyncFunction("cancelExpansion") { (view: MemorWorldMapView, promise: Promise) in
+        view.cancelExpansion(promise: promise)
+      }
+      AsyncFunction("saveExpansion") { (view: MemorWorldMapView, promise: Promise) in
+        view.saveExpansion(promise: promise)
+      }
+      AsyncFunction("restoreMap") { (view: MemorWorldMapView, original: Bool, promise: Promise) in
+        view.restoreMap(original: original, promise: promise)
+      }
+      AsyncFunction("placeText") { (view: MemorWorldMapView, id: String, title: String, promise: Promise) in
         view.placeText(id: id, title: title, promise: promise)
       }
     }
@@ -38,8 +37,11 @@ public final class MemorWorldMapModule: Module {
       DispatchQueue.global(qos: .utility).async {
         do {
           let url = try MemorWorldMapView.url(for: id)
-          if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
+          // Delete archive and history only after the caller has removed the
+          // corresponding place metadata, not during ordinary editing.
+          let folder = url.deletingLastPathComponent()
+          if FileManager.default.fileExists(atPath: folder.path) {
+            try FileManager.default.removeItem(at: folder)
           }
           promise.resolve(nil)
         } catch {
@@ -51,21 +53,20 @@ public final class MemorWorldMapModule: Module {
     AsyncFunction("importMap") { (id: String, fileUri: String, promise: Promise) in
       DispatchQueue.global(qos: .utility).async {
         do {
-          let source = URL(string: fileUri)
-          guard let source, source.isFileURL else {
-            throw NSError(domain: "MemorWorldMap", code: 4,
-              userInfo: [NSLocalizedDescriptionKey: "Arquivo local inválido."])
+          guard let source = URL(string: fileUri), source.isFileURL else {
+            throw MemorWorldMapHistoryError.invalidMap
           }
           let data = try Data(contentsOf: source, options: .mappedIfSafe)
           guard let _ = try NSKeyedUnarchiver.unarchivedObject(ofClass: ARWorldMap.self, from: data) else {
-            throw NSError(domain: "MemorWorldMap", code: 5,
-              userInfo: [NSLocalizedDescriptionKey: "O arquivo não contém um ARWorldMap válido."])
+            throw MemorWorldMapHistoryError.invalidMap
           }
           let target = try MemorWorldMapView.url(for: id)
-          if FileManager.default.fileExists(atPath: target.path) {
-            throw NSError(domain: "MemorWorldMap", code: 6,
-              userInfo: [NSLocalizedDescriptionKey: "Já existe um mapa local com este identificador."])
+          guard !FileManager.default.fileExists(atPath: target.path) else {
+            throw NSError(domain: "MemorWorldMap", code: 9,
+                          userInfo: [NSLocalizedDescriptionKey: "Um mapa com esse ID já existe."])
           }
+          try FileManager.default.createDirectory(at: target.deletingLastPathComponent(),
+                                                   withIntermediateDirectories: true)
           try data.write(to: target, options: .atomic)
           promise.resolve(MemorWorldMapView.fileRecord(id: id, url: target, byteCount: data.count))
         } catch {

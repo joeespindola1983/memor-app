@@ -2,6 +2,8 @@ import { ViroARSceneNavigator } from "@reactvision/react-viro";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Platform } from "react-native";
+import { MemorWorldMapView, type WorldMapStatus, type WorldMapViewHandle } from "../../modules/memor-world-map";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CaptureScene from "../../src/ar/CaptureScene";
@@ -21,6 +23,11 @@ const rvConfigured = Constants.expoConfig?.extra?.reactvisionConfigured === true
  * Native diagnostic metrics remain in the scan bridge, not the user interface.
  */
 export default function CapturePlaceScreen() {
+  return Platform.OS === "ios" && MemorWorldMapView
+    ? <NativeCapturePlaceScreen /> : <LegacyViroCapturePlaceScreen />;
+}
+
+function LegacyViroCapturePlaceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const initialScene = useMemo(() => ({ scene: CaptureScene }), []);
@@ -219,3 +226,76 @@ const styles = StyleSheet.create({
   steps: { flexDirection: "row", gap: 4, height: 4, marginVertical: 2 },
   step: { flex: 1 },
 });
+
+/** New iOS capture path: native ARKit archive, no ReactVision Spatial. */
+function NativeCapturePlaceScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const camera = useRef<WorldMapViewHandle>(null);
+  const [status, setStatus] = useState<WorldMapStatus | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { scanBridge.start(); }, []);
+
+  const ready = status?.tracking === "ready" && status.mapping === "mapped";
+  async function save() {
+    if (!camera.current || !ready || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const archive = await camera.current.saveMap();
+      scanBridge.markNativeWorldMap(archive);
+      router.replace("/capture/name");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível salvar o lugar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const NativeView = MemorWorldMapView!;
+  return (
+    <View style={styles.root}>
+      <NativeView
+        ref={camera}
+        style={StyleSheet.absoluteFill}
+        onStatus={(event) => setStatus(event.nativeEvent)}
+      />
+      <View pointerEvents="none" style={styles.reticle}>
+        <Text style={styles.reticleText}>+</Text>
+      </View>
+      <View style={[styles.header, { top: insets.top + 10 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Fechar câmera"
+          onPress={() => router.replace("/(tabs)/archive")} style={styles.close}>
+          <Text style={styles.closeText}>×</Text>
+        </Pressable>
+        <View style={{ flex: 1, gap: 3 }}>
+          <PixelLabel color={tokens.ink}>MEMOR / CRIAR</PixelLabel>
+          <Text style={styles.headerTitle}>Novo lugar</Text>
+        </View>
+      </View>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+        <View style={styles.panel}>
+          <View style={styles.eyebrow}>
+            <View style={[styles.dot, { backgroundColor: ready ? tokens.image : tokens.poetry }]} />
+            <PixelLabel color={tokens.ink}>{ready ? "PRONTO PARA GUARDAR" : "OBSERVANDO O AMBIENTE"}</PixelLabel>
+          </View>
+          <Text style={styles.title}>{ready ? "Lugar mapeado." : "Explore este lugar."}</Text>
+          <Text style={editorial.muted}>
+            {ready
+              ? "O mapa espacial já pode ser guardado neste iPhone para visitas offline."
+              : "Mova-se devagar por diferentes ângulos até o ambiente ficar reconhecível."}
+          </Text>
+          <MemorActionButton label={saving ? "GUARDANDO..." : "GUARDAR LUGAR"}
+            onPress={() => void save()} disabled={!ready || saving} />
+          {error || status?.error ? (
+            <Text accessibilityRole="alert" style={[editorial.muted, { color: tokens.poetry }]}>
+              {error || status?.error}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+}

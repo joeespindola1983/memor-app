@@ -11,7 +11,6 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "deps:check": "npm ls react react-dom --depth=0",
-    "vps:doctor": "node scripts/vps-doctor.mjs",
     "pretest": "npm run typecheck"
   },
   "dependencies": {

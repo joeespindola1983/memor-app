@@ -1,6 +1,7 @@
 import type { SavedCoordinate } from "./discovery";
 import type { CaptureEvidence } from "./capture";
 import type { HostedVPSAnchor } from "./cloudAnchor";
+import type { WorldMapFile } from "../../modules/memor-world-map";
 
 // Keep this domain module executable by Node 22 strip-types without a runtime
 // TypeScript import (the Expo mobile bundler resolves extensionless imports).
@@ -38,6 +39,8 @@ export interface LabPlace {
   /** Tracking evidence only, not ARWorldMap or cross-session relocalization. */
   capture?: CaptureEvidence;
   cloudAnchor?: HostedVPSAnchor;
+  /** ARKit archive; native map is retained separately in the filesystem. */
+  worldMap?: WorldMapFile;
 }
 
 export function cleanTitle(value: string): string {
@@ -55,7 +58,7 @@ function qaId(): string {
 }
 
 export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate,
-  capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor): LabPlace {
+  capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor, worldMap?: WorldMapFile): LabPlace {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Informe um nome para o lugar.");
   if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
@@ -64,18 +67,19 @@ export function makePlace(title: string, now = new Date(), coordinate?: SavedCoo
     ...(coordinate ? { coordinate } : {}),
     ...(capture ? { capture } : {}),
     ...(cloudAnchor ? { cloudAnchor } : {}),
+    ...(worldMap ? { worldMap } : {}),
   };
 }
 
 export function makeArtwork(
   kind: ArtworkKind, title: string, position: Vec3, now = new Date(),
-  location?: { position: Vec3; anchorId: string },
+  location?: { position: Vec3; anchorId: string }, artworkID?: string,
 ): ArtworkDraft {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Dê um nome à intervenção.");
   if (!isVec3(position)) throw new Error("Posição espacial inválida.");
   if (location && (!isVec3(location.position) || !location.anchorId)) throw new Error("Posição ancorada inválida.");
-  return { id: qaId(), kind, title: normalized, sessionPosition: [...position], createdAt: now.toISOString(),
+  return { id: artworkID ?? qaId(), kind, title: normalized, sessionPosition: [...position], createdAt: now.toISOString(),
     ...(location ? { locationPosition: [...location.position] as Vec3, locationAnchorId: location.anchorId } : {}),
   };
 }
@@ -115,6 +119,13 @@ export function isPlace(value: unknown): value is LabPlace {
       typeof place.cloudAnchor.expiresAt === "string" && Number.isFinite(Date.parse(place.cloudAnchor.expiresAt)) &&
       typeof place.cloudAnchor.ttlDays === "number" && Number.isInteger(place.cloudAnchor.ttlDays) &&
       place.cloudAnchor.ttlDays >= 1 && place.cloudAnchor.ttlDays <= 365
+    )) &&
+    (place.worldMap === undefined || (
+      place.worldMap.provider === "arkit-worldmap" && place.worldMap.version === 1 &&
+      typeof place.worldMap.id === "string" && /^[a-f0-9-]{36}$/i.test(place.worldMap.id) &&
+      typeof place.worldMap.uri === "string" && place.worldMap.uri.startsWith("file://") &&
+      typeof place.worldMap.byteCount === "number" && Number.isFinite(place.worldMap.byteCount) && place.worldMap.byteCount > 0 &&
+      typeof place.worldMap.createdAt === "string" && Number.isFinite(Date.parse(place.worldMap.createdAt))
     )) &&
     (place.capture === undefined || (
       place.capture.kind === "tracking-observation-v1" &&
