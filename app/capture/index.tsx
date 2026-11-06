@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { MemorWorldMapView, worldMapNative, type WorldMapStatus, type WorldMapViewHandle } from "../../modules/memor-world-map";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CaptureScene from "../../src/ar/CaptureScene";
 import { scanBridge, useScanProgress } from "../../src/ar/scanBridge";
@@ -270,6 +270,15 @@ function NativeCapturePlaceScreen() {
   }
 
   const ready = status?.tracking === "ready" && status.mapping === "mapped";
+  async function exportLogs() {
+    try {
+      const history = await worldMapNative?.exportDiagnostics();
+      if (history) await Share.share({ message: history, title: "Memor - logs da captura" });
+      else setError("Ainda não há eventos de depuração.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Não foi possível exportar os logs.");
+    }
+  }
   async function save() {
     if (!camera.current || !ready || saving) return;
     setSaving(true);
@@ -326,6 +335,12 @@ function NativeCapturePlaceScreen() {
           </Text>
           <MemorActionButton label={saving ? "GUARDANDO..." : "GUARDAR LUGAR"}
             onPress={() => void save()} disabled={!ready || saving} />
+          <Pressable accessibilityRole="button" onPress={() => void exportLogs()}
+            style={{ alignItems: "center", paddingVertical: 6 }}>
+            <Text style={{ fontSize: 11, color: tokens.muted, textDecorationLine: "underline" }}>
+              Exportar histórico de depuração
+            </Text>
+          </Pressable>
           {error || status?.error ? (
             <Text accessibilityRole="alert" style={[editorial.muted, { color: tokens.poetry }]}>
               {error || status?.error}
