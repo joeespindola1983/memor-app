@@ -5,7 +5,7 @@ const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf
 
 test("AR renderer uses didAdd and refresh, avoiding missing artwork metadata race", () => {
   const swift = read("modules/memor-world-map/ios/MemorWorldMapView.swift");
-  assert.match(swift, /self\.titles\[name\] = title\s*\n\s*MemorSpatialTrace\.write\("text\.anchor\.adding"/);
+  assert.match(swift, /titles\[name\] = title\s*\n\s*MemorSpatialTrace\.write\("text\.anchor\.adding"/);
   assert.match(swift, /renderer\(_ renderer: SCNSceneRenderer, didAdd node:/);
   assert.match(swift, /self\.renderArtwork\(name: name, on: node\)/);
   assert.match(swift, /refreshArtworkNodes\(\)/);
