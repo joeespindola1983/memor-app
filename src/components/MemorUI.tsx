@@ -1,5 +1,4 @@
 import { useRouter } from "expo-router";
-import Constants from "expo-constants";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,10 +28,6 @@ export function MemorGlobalHeader() {
         <Text style={{ fontFamily: "monospace", fontWeight: "900", letterSpacing: 3,
           fontSize: 13, color: tokens.ink }}>MEMOR</Text>
         <View style={{ flex: 1 }}/>
-        <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-          <View style={{ width: 6, height: 6, backgroundColor: tokens.image }}/>
-          <PixelLabel color={tokens.ink}>{Constants.expoConfig?.extra?.reactvisionConfigured === true ? "VPS QA" : "LOCAL"}</PixelLabel>
-        </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Ir para meu perfil"
           onPress={() => router.push("/(tabs)/profile")}
           style={{ width: 36, height: 36, borderWidth: 1, borderColor: tokens.ink,

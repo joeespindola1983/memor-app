@@ -33,7 +33,7 @@ export default function EditArtwork() {
   function remove(){
     if(!artwork||!place)return;
     Alert.alert("Excluir intervenção?",
-      "O texto ou cartão será removido do arquivo local. A ação não altera nenhuma publicação na nuvem.",
+      "Esta intervenção será removida deste aparelho.",
       [
         {text:"Cancelar",style:"cancel"},
         {text:"Excluir",style:"destructive",onPress:async()=>{
@@ -60,24 +60,14 @@ export default function EditArtwork() {
           <>
             <PixelLabel>MEMOR / EDITAR INTERVENÇÃO</PixelLabel>
             <Text style={[editorial.heading,{fontSize:34}]}>Sua memória,{"\n"}suas palavras.</Text>
-            <PixelLabel>{artwork.kind==="text"?"TEXTO 3D":"CARTÃO EXPERIMENTAL"} · {place.title}</PixelLabel>
+            <PixelLabel>{artwork.kind==="text"?"TEXTO":"CARTÃO"} · {place.title}</PixelLabel>
             <TextInput value={name} onChangeText={setName} testID="edit-artwork-title-input"
               maxLength={72} multiline textAlignVertical="top" autoCapitalize="sentences"
               placeholder="Texto da intervenção" placeholderTextColor={tokens.muted}
               style={[shared.input,{minHeight:110,paddingTop:17}]}/>
-            <View style={{padding:14,backgroundColor:tokens.map,gap:9}}>
-              <PixelLabel>REFERÊNCIA ESPACIAL</PixelLabel>
-              <Text style={editorial.muted}>
-                Esta obra foi posicionada na sessão AR de origem. Seu texto pode ser editado aqui.
-                Para ajustar a posição, entre na RA e mova uma intervenção criada naquela sessão.
-              </Text>
-              <Text style={[editorial.muted,{fontSize:12}]}>
-                Posição histórica: {artwork.sessionPosition.map(x=>x.toFixed(2)).join(" / ")} metros
-              </Text>
-              <Text style={[editorial.muted,{fontSize:12}]}>
-                A posição salva não será restaurada automaticamente em uma nova sessão.
-              </Text>
-            </View>
+            <Text style={editorial.muted}>
+              Você pode mudar as palavras aqui. Para mudar o lugar onde elas aparecem, abra a câmera e escolha a intervenção.
+            </Text>
             {problem ? <Text style={{color:tokens.poetry}}>{problem}</Text>:null}
             <View style={{flex:1}}/>
             <MemorActionButton label={saving?"SALVANDO...":"SALVAR ALTERAÇÃO"}
