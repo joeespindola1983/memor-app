@@ -119,7 +119,7 @@ Veja [`docs/reactvision-vps-qa.md`](docs/reactvision-vps-qa.md). O ReactVision V
 cp .env.example .env
 # Preencha .env com a chave CLIENTE pública recebida no ReactVision Studio e o Project ID correspondente:
 # REACTVISION_CLIENT_KEY=rv_client_...
-# REACTVISION_PROJECT_ID=<Project ID do Studio>
+# REACTVISION_PROJECT_ID=381827b7-e4e6-422a-98f9-733c861f3f39 # já configurado como padrão
 
 npm install
 npm run typecheck

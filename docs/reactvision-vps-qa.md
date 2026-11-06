@@ -16,7 +16,7 @@ git pull --ff-only
 cp .env.example .env
 # edite .env e preencha:
 # REACTVISION_CLIENT_KEY=<a chave rv_client_ fornecida pelo dono do projeto>
-# REACTVISION_PROJECT_ID=<Project ID do mesmo projeto>
+# REACTVISION_PROJECT_ID=381827b7-e4e6-422a-98f9-733c861f3f39 (já vem preenchido na branch)
 npm install
 npm run test
 npm run typecheck
@@ -25,7 +25,7 @@ npx expo prebuild --clean --platform ios
 npx expo run:ios --device
 ```
 
-**É obrigatório recompilar** depois de preencher credenciais, porque `app.config.ts` injeta `RVApiKey` e `RVProjectId` no código nativo. Não basta recarregar o Metro. Para Android, requer dispositivo ARCore certificado e build Android com a mesma configuração.
+**É obrigatório recompilar** depois de preencher a chave de cliente, porque `app.config.ts` injeta `RVApiKey` e `RVProjectId` no código nativo. Não basta recarregar o Metro. Para Android, requer dispositivo ARCore certificado e build Android com a mesma configuração.
 
 ## 2. Fluxo de ponta a ponta
 

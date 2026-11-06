@@ -8,7 +8,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const settings = base.expo as unknown as ExpoConfig;
   const mapsKey = process.env.EXPO_ANDROID_MAPS_API_KEY?.trim();
   const rvKey = process.env.REACTVISION_CLIENT_KEY?.trim();
-  const rvProjectId = process.env.REACTVISION_PROJECT_ID?.trim();
+  // The Project ID is a public identifier, not an administrative credential.
+  const rvProjectId = process.env.REACTVISION_PROJECT_ID?.trim() || "381827b7-e4e6-422a-98f9-733c861f3f39";
   const rvReady = Boolean(rvKey && rvProjectId);
 
   const plugins = (settings.plugins ?? []).map((plugin) => {
