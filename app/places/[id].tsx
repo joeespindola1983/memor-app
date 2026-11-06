@@ -8,6 +8,7 @@ import { usePlaces } from "../../src/data/PlaceStore";
 import { useEditorialDrafts } from "../../src/data/EditorialDraftStore";
 import { MemorActionButton } from "../../src/components/MemorUI";
 import { shared, tokens } from "../../src/theme/tokens";
+import { isAnchorExpired } from "../../src/domain/cloudAnchor";
 
 export default function PlaceDetails() {
   const router = useRouter();
@@ -56,6 +57,25 @@ export default function PlaceDetails() {
             <Text style={{ color: tokens.mint, fontSize: 12 }}>{place.artworks.length} intervenções locais</Text>
           </View>
         </View>
+        {place.cloudAnchor ? (
+          <View style={{gap:10,backgroundColor:tokens.park,padding:16}}>
+            <PixelLabel color={tokens.ink}>✓ MAPA REACTVISION VPS HOSPEDADO</PixelLabel>
+            <Text style={shared.body}>
+              Âncora de referência para revisitas e posições de obras salvas.
+            </Text>
+            <Text selectable style={[shared.secondary,{fontSize:11}]}>
+              ID da âncora: {place.cloudAnchor.cloudAnchorId}
+            </Text>
+            <Text style={shared.secondary}>
+              {isAnchorExpired(place.cloudAnchor)
+                ? "Âncora expirada. Será necessário criar outra referência."
+                : `Válida até ${new Date(place.cloudAnchor.expiresAt).toLocaleDateString("pt-BR")} · ${place.cloudAnchor.ttlDays} dias de teste.`}
+            </Text>
+            <Text style={[shared.secondary,{fontSize:11}]}>
+              O ReactVision hospeda as características espaciais; textos e intervenções seguem apenas neste aparelho.
+            </Text>
+          </View>
+        ) : null}
         {place.capture ? (
           <View style={{gap:8,backgroundColor:tokens.map,padding:14}}>
             <PixelLabel color={tokens.ink}>OBSERVAÇÃO ESPACIAL SALVA</PixelLabel>
@@ -78,9 +98,9 @@ export default function PlaceDetails() {
         <View style={{ gap: 10 }}>
           <Text style={shared.h2}>Experiência no espaço</Text>
           <Text style={shared.secondary}>
-            Abrir a RA inicia uma nova sessão de rastreamento. Você poderá
-            posicionar novas intervenções, mas obras anteriores NÃO reaparecem
-            na posição original até termos VPS ou âncoras compartilhadas.
+            {place.cloudAnchor
+              ? "O Memor tentará reconhecer a âncora VPS do lugar. Obras criadas depois do reconhecimento serão recuperadas no mesmo espaço em visitas posteriores. Textos antigos, sem referência VPS, não podem ser posicionados automaticamente."
+              : "Este lugar não possui âncora compartilhada. Intervenções criadas aqui são visíveis apenas na mesma sessão AR e não reaparecem no mesmo ponto ao voltar."}
           </Text>
           <ActionButton label="CRIAR / VISUALIZAR EM RA" onPress={() =>
             router.push({ pathname: "/experience/[id]", params: { id: place.id } })}
@@ -109,7 +129,11 @@ export default function PlaceDetails() {
               <View style={{ flex: 1, gap: 4 }}>
                 <PixelLabel>{item.kind === "text" ? "TEXTO 3D" : "CARTÃO DE TESTE"} / {index + 1}</PixelLabel>
                 <Text style={{ color: tokens.ink, fontWeight: "600" }}>{item.title}</Text>
-                <Text style={shared.secondary}>Pose da sessão original · não relocalizável</Text>
+                <Text style={shared.secondary}>
+                  {item.locationPosition && place.cloudAnchor
+                    ? "Vinculada ao mapa VPS · recuperável após reconhecimento"
+                    : "Pose da sessão original · não relocalizável"}
+                </Text>
               </View>
               <Text style={{fontSize:20,color:tokens.ink}}>›</Text>
             </Pressable>
