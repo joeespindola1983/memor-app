@@ -3,7 +3,8 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { isValidCoordinate, type SavedCoordinate } from "../domain/discovery";
 import { isCaptureEvidence, type CaptureEvidence } from "../domain/capture";
 import {
-  isPlace, makeArtwork, makePlace, cleanTitle, type ArtworkDraft, type ArtworkKind,
+  isPlace, makeArtwork, makePlace, updateArtworkDraft, removeArtworkDraft,
+  type ArtworkDraft, type ArtworkKind,
   type LabPlace, type Vec3,
 } from "../domain/models";
 
@@ -86,18 +87,10 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
   };
 
   const updateArtwork = async (placeId: string, artworkId: string, title: string, position?: Vec3) => {
-    const name = cleanTitle(title);
-    if (!name) throw new Error("Informe o texto da intervenção.");
-    if (position && (position.length !== 3 || !position.every(Number.isFinite))) {
-      throw new Error("Posição inválida.");
-    }
     const place = current.current.find(p => p.id === placeId);
     const existing = place?.artworks.find(art => art.id === artworkId);
     if (!existing) throw new Error("Intervenção não encontrada.");
-    const updated: ArtworkDraft = {
-      ...existing, title: name,
-      ...(position ? { sessionPosition: [...position] as Vec3 } : {}),
-    };
+    const updated = updateArtworkDraft(existing, title, position);
     const next = current.current.map(p => p.id === placeId
       ? { ...p, updatedAt: new Date().toISOString(),
           artworks: p.artworks.map(a => a.id === artworkId ? updated : a) }
@@ -111,7 +104,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     if (!place?.artworks.some(a => a.id === artworkId)) throw new Error("Intervenção não encontrada.");
     const next = current.current.map(p => p.id === placeId
       ? { ...p, updatedAt: new Date().toISOString(),
-          artworks: p.artworks.filter(a => a.id !== artworkId) } : p);
+          artworks: removeArtworkDraft(p, artworkId).artworks } : p);
     await save(next);
   };
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makePlace, makeArtwork, cleanTitle, isPlace } from "../src/domain/models.ts";
+import { makePlace, makeArtwork, cleanTitle, isPlace, updateArtworkDraft, removeArtworkDraft } from "../src/domain/models.ts";
 import { pickMeasuredPlaneHit, selectPlacementHit, normalizeCameraForward, summarizeHits } from "../src/ar/hitTest.ts";
 
 test("place names are normalized and metadata starts empty", () => {
@@ -57,4 +57,26 @@ test("depth and estimates are distinguished", () => {
 });
 test("hit summary shows native result types", () => {
   assert.equal(summarizeHits([{type:"FeaturePoint"},{type:"DepthPoint"},{type:"DepthPoint"}]), "FeaturePoint: 1 · DepthPoint: 2");
+});
+
+test("editing preserves artwork identity and prior metadata", () => {
+  const source=makeArtwork("text","Antes",[1,0,-1]);
+  const changed=updateArtworkDraft(source,"  Nova   memória  ");
+  assert.equal(changed.id,source.id);
+  assert.equal(changed.title,"Nova memória");
+  assert.equal(source.title,"Antes");
+  const moved=updateArtworkDraft(changed,changed.title,[2,0,-1]);
+  assert.deepEqual(moved.sessionPosition,[2,0,-1]);
+  assert.deepEqual(changed.sessionPosition,[1,0,-1]);
+  assert.throws(()=>updateArtworkDraft(source," "),/Informe/);
+  assert.throws(()=>updateArtworkDraft(source,"ok",[Infinity,0,0]),/Posição/);
+});
+test("deleting a single artwork keeps the others", () => {
+  const place=makePlace("Museu");
+  const a=makeArtwork("text","A",[1,0,-1]),b=makeArtwork("card","B",[0,0,-1]);
+  place.artworks=[a,b];
+  const updated=removeArtworkDraft(place,a.id);
+  assert.deepEqual(updated.artworks.map(x=>x.id),[b.id]);
+  assert.equal(place.artworks.length,2);
+  assert.throws(()=>removeArtworkDraft(updated,a.id),/não encontrada/);
 });

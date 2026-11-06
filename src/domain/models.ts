@@ -70,6 +70,19 @@ export function makeArtwork(
   return { id: qaId(), kind, title: normalized, sessionPosition: [...position], createdAt: now.toISOString() };
 }
 
+/** An old session position is only edited as metadata, not a new physical anchor. */
+export function updateArtworkDraft(artwork: ArtworkDraft, title: string, position?: Vec3): ArtworkDraft {
+  const name = cleanTitle(title);
+  if (!name) throw new Error("Informe o texto da intervenção.");
+  if (position && !isVec3(position)) throw new Error("Posição inválida.");
+  return { ...artwork, title: name, ...(position ? { sessionPosition: [...position] as Vec3 } : {}) };
+}
+
+export function removeArtworkDraft(place: LabPlace, artworkId: string): LabPlace {
+  if (!place.artworks.some(art => art.id === artworkId)) throw new Error("Intervenção não encontrada.");
+  return { ...place, artworks: place.artworks.filter(art => art.id !== artworkId) };
+}
+
 export function isPlace(value: unknown): value is LabPlace {
   if (typeof value !== "object" || value == null) return false;
   const place = value as Partial<LabPlace>;
