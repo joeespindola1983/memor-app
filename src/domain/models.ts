@@ -1,5 +1,6 @@
 import type { SavedCoordinate } from "./discovery";
 import type { CaptureEvidence } from "./capture";
+import type { HostedVPSAnchor } from "./cloudAnchor";
 
 // Keep this domain module executable by Node 22 strip-types without a runtime
 // TypeScript import (the Expo mobile bundler resolves extensionless imports).
@@ -21,6 +22,9 @@ export interface ArtworkDraft {
   title: string;
   /** Valid only in the *original* in-memory AR session. Never relocalize from this alone. */
   sessionPosition: Vec3;
+  /** Position relative to the resolved ReactVision location frame (persistent). */
+  locationPosition?: Vec3;
+  locationAnchorId?: string;
   createdAt: string;
 }
 
@@ -33,6 +37,7 @@ export interface LabPlace {
   coordinate?: SavedCoordinate;
   /** Tracking evidence only, not ARWorldMap or cross-session relocalization. */
   capture?: CaptureEvidence;
+  cloudAnchor?: HostedVPSAnchor;
 }
 
 export function cleanTitle(value: string): string {
@@ -50,7 +55,7 @@ function qaId(): string {
 }
 
 export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate,
-  capture?: CaptureEvidence): LabPlace {
+  capture?: CaptureEvidence, cloudAnchor?: HostedVPSAnchor): LabPlace {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Informe um nome para o lugar.");
   if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
@@ -58,24 +63,35 @@ export function makePlace(title: string, now = new Date(), coordinate?: SavedCoo
   return { id: qaId(), title: normalized, createdAt: at, updatedAt: at, artworks: [],
     ...(coordinate ? { coordinate } : {}),
     ...(capture ? { capture } : {}),
+    ...(cloudAnchor ? { cloudAnchor } : {}),
   };
 }
 
 export function makeArtwork(
   kind: ArtworkKind, title: string, position: Vec3, now = new Date(),
+  location?: { position: Vec3; anchorId: string },
 ): ArtworkDraft {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Dê um nome à intervenção.");
   if (!isVec3(position)) throw new Error("Posição espacial inválida.");
-  return { id: qaId(), kind, title: normalized, sessionPosition: [...position], createdAt: now.toISOString() };
+  if (location && (!isVec3(location.position) || !location.anchorId)) throw new Error("Posição ancorada inválida.");
+  return { id: qaId(), kind, title: normalized, sessionPosition: [...position], createdAt: now.toISOString(),
+    ...(location ? { locationPosition: [...location.position] as Vec3, locationAnchorId: location.anchorId } : {}),
+  };
 }
 
 /** An old session position is only edited as metadata, not a new physical anchor. */
-export function updateArtworkDraft(artwork: ArtworkDraft, title: string, position?: Vec3): ArtworkDraft {
+export function updateArtworkDraft(artwork: ArtworkDraft, title: string, position?: Vec3, locationPosition?: Vec3): ArtworkDraft {
   const name = cleanTitle(title);
   if (!name) throw new Error("Informe o texto da intervenção.");
   if (position && !isVec3(position)) throw new Error("Posição inválida.");
-  return { ...artwork, title: name, ...(position ? { sessionPosition: [...position] as Vec3 } : {}) };
+  if (locationPosition && (!artwork.locationAnchorId || !isVec3(locationPosition))) {
+    throw new Error("Transformada espacial inválida.");
+  }
+  return { ...artwork, title: name,
+    ...(position ? { sessionPosition: [...position] as Vec3 } : {}),
+    ...(locationPosition ? { locationPosition: [...locationPosition] as Vec3 } : {}),
+  };
 }
 
 export function removeArtworkDraft(place: LabPlace, artworkId: string): LabPlace {
@@ -89,6 +105,16 @@ export function isPlace(value: unknown): value is LabPlace {
   return typeof place.id === "string" && typeof place.title === "string" &&
     typeof place.createdAt === "string" && Array.isArray(place.artworks) &&
     (place.coordinate === undefined || isValidCoordinate(place.coordinate)) &&
+    (place.cloudAnchor === undefined || (
+      place.cloudAnchor.provider === "reactvision" &&
+      typeof place.cloudAnchor.cloudAnchorId === "string" && place.cloudAnchor.cloudAnchorId.length > 0 &&
+      typeof place.cloudAnchor.locationTransform === "string" &&
+      place.cloudAnchor.locationTransform.split(",").length === 16 &&
+      typeof place.cloudAnchor.hostedAt === "string" && Number.isFinite(Date.parse(place.cloudAnchor.hostedAt)) &&
+      typeof place.cloudAnchor.expiresAt === "string" && Number.isFinite(Date.parse(place.cloudAnchor.expiresAt)) &&
+      typeof place.cloudAnchor.ttlDays === "number" && Number.isInteger(place.cloudAnchor.ttlDays) &&
+      place.cloudAnchor.ttlDays >= 1 && place.cloudAnchor.ttlDays <= 365
+    )) &&
     (place.capture === undefined || (
       place.capture.kind === "tracking-observation-v1" &&
       typeof place.capture.capturedAt === "string" &&
@@ -106,5 +132,10 @@ export function isPlace(value: unknown): value is LabPlace {
     )) &&
     place.artworks.every((item) =>
       item && typeof item.id === "string" && typeof item.title === "string" &&
-      (item.kind === "text" || item.kind === "card") && isVec3(item.sessionPosition));
+      (item.kind === "text" || item.kind === "card") && isVec3(item.sessionPosition) &&
+      (item.locationPosition === undefined || (
+        isVec3(item.locationPosition) &&
+        typeof item.locationAnchorId === "string" &&
+        place.cloudAnchor?.cloudAnchorId === item.locationAnchorId
+      )));
 }

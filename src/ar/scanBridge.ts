@@ -5,6 +5,7 @@ import {
 } from "../domain/capture";
 import { isVec3 } from "./hitTest";
 import type { Vec3 } from "../domain/models";
+import type { HostedVPSAnchor } from "../domain/cloudAnchor";
 
 let status: ScanProgress = initialScan;
 let lastCamera: Vec3 | null = null;
@@ -15,6 +16,7 @@ let runID = 0;
 const anchors = new Set<string>();
 const listeners = new Set<() => void>();
 let pendingCapture: CaptureEvidence | null = null;
+let pendingAnchor: HostedVPSAnchor | null = null;
 
 function emit(next: ScanProgress) {
   if (next === status) return;
@@ -32,6 +34,7 @@ export const scanBridge = {
     accumulatedNormalMs = 0;
     anchors.clear();
     pendingCapture = null;
+    pendingAnchor = null;
     emit({ ...initialScan });
     return runID;
   },
@@ -83,13 +86,15 @@ export const scanBridge = {
     emit({ ...status, normalTrackingSeconds: seconds, pathMeters, sampleCount: status.sampleCount+1 });
   },
   canFinish() { return scanIsReady(status); },
-  finish(): CaptureEvidence {
+  finish(cloudAnchor?: HostedVPSAnchor): CaptureEvidence {
     const evidence = makeCaptureEvidence(status);
     pendingCapture = evidence;
+    pendingAnchor = cloudAnchor ?? null;
     return evidence;
   },
   takePending(): CaptureEvidence | null { return pendingCapture; },
-  clearPending() { pendingCapture = null; },
+  takePendingAnchor(): HostedVPSAnchor | null { return pendingAnchor; },
+  clearPending() { pendingCapture = null; pendingAnchor = null; },
 };
 
 export function useScanProgress() {

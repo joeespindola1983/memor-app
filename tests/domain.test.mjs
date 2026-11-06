@@ -80,3 +80,22 @@ test("deleting a single artwork keeps the others", () => {
   assert.equal(place.artworks.length,2);
   assert.throws(()=>removeArtworkDraft(updated,a.id),/não encontrada/);
 });
+
+test("cloud-hosted artworks keep location coordinates independent of temporary AR pose", () => {
+  const identity="1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1";
+  const place=makePlace("Local",new Date(),undefined,undefined,{
+    provider:"reactvision",cloudAnchorId:"anchor-01",locationTransform:identity,
+    hostedAt:"2026-11-06T12:00:00.000Z",expiresAt:"2026-11-13T12:00:00.000Z",ttlDays:7,
+  });
+  const art=makeArtwork("text","Memória",[2,3,4],new Date(),{
+    position:[0.5,0.2,-0.6],anchorId:"anchor-01",
+  });
+  place.artworks.push(art);
+  assert.equal(isPlace(place),true);
+  assert.deepEqual(art.locationPosition,[0.5,0.2,-0.6]);
+  assert.deepEqual(art.sessionPosition,[2,3,4]);
+  const changed=updateArtworkDraft(art,"Outra", [5,6,7],[0.1,0.2,-0.3]);
+  assert.deepEqual(changed.locationPosition,[0.1,0.2,-0.3]);
+  assert.deepEqual(art.locationPosition,[0.5,0.2,-0.6]);
+  assert.equal(isPlace({...place,artworks:[{...art,locationAnchorId:"other"}]}),false);
+});
