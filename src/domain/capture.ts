@@ -11,7 +11,7 @@ export type CaptureEvidence = {
   planeCount: number;
   depthAvailable: boolean;
   sampleCount: number;
-  quality: "measured-plane" | "depth-only";
+  quality: "measured-plane" | "depth-only" | "vps-hosted";
 };
 
 export type ScanProgress = {
@@ -67,6 +67,21 @@ export function makeCaptureEvidence(progress: ScanProgress, now = new Date()): C
   };
 }
 
+/** Cloud VPS has its own native coverage gate, separate from plane/depth. */
+export function makeHostedCaptureEvidence(progress: ScanProgress, now = new Date()): CaptureEvidence {
+  if (progress.tracking !== "ready") throw new Error("Rastreamento VPS ainda não está normal.");
+  return {
+    kind: "tracking-observation-v1",
+    capturedAt: now.toISOString(),
+    normalTrackingSeconds: Math.floor(progress.normalTrackingSeconds),
+    pathMeters: Math.round(progress.pathMeters * 100) / 100,
+    planeCount: progress.planeCount,
+    depthAvailable: progress.depthAvailable,
+    sampleCount: progress.sampleCount,
+    quality: "vps-hosted",
+  };
+}
+
 export function isCaptureEvidence(value: unknown): value is CaptureEvidence {
   if (!value || typeof value !== "object") return false;
   const x = value as Partial<CaptureEvidence>;
@@ -77,7 +92,7 @@ export function isCaptureEvidence(value: unknown): value is CaptureEvidence {
     typeof x.planeCount === "number" && Number.isSafeInteger(x.planeCount) && x.planeCount >= 0 &&
     typeof x.sampleCount === "number" && Number.isSafeInteger(x.sampleCount) && x.sampleCount >= 0 &&
     typeof x.depthAvailable === "boolean" &&
-    (x.quality === "measured-plane" || x.quality === "depth-only");
+    (x.quality === "measured-plane" || x.quality === "depth-only" || x.quality === "vps-hosted");
 }
 
 export type CapturePhase = "scanning" | "naming" | "saved" | "viewing";

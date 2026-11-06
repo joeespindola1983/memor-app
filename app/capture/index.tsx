@@ -66,7 +66,7 @@ export default function CapturePlaceScreen() {
   }
 
   async function finishCloud() {
-    if (finishing || !scanIsReady(scanBridge.getSnapshot()) || !scanCoverageReady(vpsStatus)) return;
+    if (finishing || progress.tracking !== "ready" || !scanCoverageReady(vpsStatus)) return;
     setFinishing(true);
     setProblem("");
     try {
@@ -98,7 +98,7 @@ export default function CapturePlaceScreen() {
     }
   }
 
-  const cloudReady = cloudScanning && scanCoverageReady(vpsStatus) && scanIsReady(progress);
+  const cloudReady = cloudScanning && scanCoverageReady(vpsStatus) && progress.tracking === "ready";
 
   return (
     <View style={{flex:1,backgroundColor:tokens.ink}}>

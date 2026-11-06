@@ -120,7 +120,7 @@ export function isPlace(value: unknown): value is LabPlace {
       place.capture.kind === "tracking-observation-v1" &&
       typeof place.capture.capturedAt === "string" &&
       Number.isFinite(Date.parse(place.capture.capturedAt)) &&
-      (place.capture.quality === "measured-plane" || place.capture.quality === "depth-only") &&
+      (place.capture.quality === "measured-plane" || place.capture.quality === "depth-only" || (place.capture.quality === "vps-hosted" && place.cloudAnchor !== undefined)) &&
       typeof place.capture.pathMeters === "number" && Number.isFinite(place.capture.pathMeters) &&
       place.capture.pathMeters >= 0 &&
       typeof place.capture.normalTrackingSeconds === "number" &&

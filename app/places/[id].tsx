@@ -83,10 +83,12 @@ export default function PlaceDetails() {
               {place.capture.planeCount} planos · {place.capture.normalTrackingSeconds}s tracking · {place.capture.pathMeters.toFixed(1)}m explorados
             </Text>
             <Text style={shared.secondary}>
-              {place.capture.quality === "depth-only"
+              {place.capture.quality === "vps-hosted"
+                ? "Scan VPS hospedado após validação nativa. "
+                : place.capture.quality === "depth-only"
                 ? "Profundidade detectada sem plano confirmado. "
                 : "Ao menos um plano confirmado durante a varredura. "}
-              Este registro é diagnóstico: ainda não contém mapa espacial relocalizável.
+              Este relatório é diagnóstico. {place.cloudAnchor ? "O VPS está hospedado para tentar relocalização." : "Não há mapa espacial recuperável."}
             </Text>
           </View>
         ) : (

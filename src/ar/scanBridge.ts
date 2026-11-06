@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import {
-  initialScan, makeCaptureEvidence, scanIsReady, type CaptureEvidence,
+  initialScan, makeCaptureEvidence, makeHostedCaptureEvidence, scanIsReady, type CaptureEvidence,
   type ScanProgress,
 } from "../domain/capture";
 import { isVec3 } from "./hitTest";
@@ -138,7 +138,7 @@ export const scanBridge = {
   },
   canFinish() { return scanIsReady(status); },
   finish(cloudAnchor?: HostedVPSAnchor): CaptureEvidence {
-    const evidence = makeCaptureEvidence(status);
+    const evidence = cloudAnchor ? makeHostedCaptureEvidence(status) : makeCaptureEvidence(status);
     pendingCapture = evidence;
     pendingAnchor = cloudAnchor ?? null;
     return evidence;

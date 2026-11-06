@@ -70,7 +70,9 @@ export default function NameCapturedPlace() {
             {evidence.planeCount} planos · {evidence.normalTrackingSeconds}s tracking · {evidence.pathMeters.toFixed(1)}m explorados
           </Text>
           <Text style={[editorial.muted,{fontSize:12}]}>
-            {evidence.quality==="depth-only"
+            {evidence.quality==="vps-hosted"
+              ?"VPS hospedado com sucesso no ReactVision (cobertura validada pelo provedor)."
+              : evidence.quality==="depth-only"
               ?"Qualidade experimental por profundidade; nenhum plano físico confirmado."
               :"Ao menos um plano detectado durante a observação."}
           </Text>
