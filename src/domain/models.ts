@@ -1,3 +1,5 @@
+import type { SavedCoordinate } from "./discovery";
+
 export type Vec3 = [number, number, number];
 export type ArtworkKind = "text" | "card";
 
@@ -16,6 +18,7 @@ export interface LabPlace {
   createdAt: string;
   updatedAt: string;
   artworks: ArtworkDraft[];
+  coordinate?: SavedCoordinate;
 }
 
 export function cleanTitle(value: string): string {
@@ -32,11 +35,13 @@ function qaId(): string {
   return `qa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-export function makePlace(title: string, now = new Date()): LabPlace {
+export function makePlace(title: string, now = new Date(), coordinate?: SavedCoordinate): LabPlace {
   const normalized = cleanTitle(title);
   if (!normalized) throw new Error("Informe um nome para o lugar.");
   const at = now.toISOString();
-  return { id: qaId(), title: normalized, createdAt: at, updatedAt: at, artworks: [] };
+  return { id: qaId(), title: normalized, createdAt: at, updatedAt: at, artworks: [],
+    ...(coordinate ? { coordinate } : {}),
+  };
 }
 
 export function makeArtwork(

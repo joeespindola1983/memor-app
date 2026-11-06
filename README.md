@@ -83,3 +83,11 @@ npm run typecheck
 A partir desta revisão, a cena AR passa a direção real da câmera (`onCameraTransformUpdate.forward`) para `performARHitTestWithRay`. O vetor fixo `[0, 0, -1]` anterior não acompanhava a inclinação do celular. O navigator usa `depthEnabled`, permitindo resultados `DepthPoint` em aparelhos compatíveis.
 
 A experiência mostra **DIREÇÃO DA CÂMERA**, **PROFUNDIDADE** e **ÚLTIMO TESTE**. A seleção prioriza plano real, depois profundidade real e por último plano horizontal estimado. Estimativas ficam explicitamente identificadas como **experimentais** e os dados seguem sem relocalização espacial persistente. Se o log do iPhone registrar `poor slam`, o ARKit ainda pode não conseguir fornecer nenhum resultado mesmo com o código corrigido.
+
+## Nova base do produto
+
+A branch `feat/memor-product-migration-foundation` migra as telas principais e os contratos editoriais do SwiftUI. Consulte [o plano](docs/migration-roadmap.md).
+
+O mapa usa **Apple Maps no iOS** e **Google Maps SDK no Android**. Para mapas Android, configure uma chave restrita via `EXPO_ANDROID_MAPS_API_KEY` durante o build. A criação e visualização AR continuam restritas a dispositivos compatíveis com ARKit/ARCore.
+
+Novos módulos nativos (`react-native-maps`, `expo-location`) exigem recompilação do app, não apenas reload do Metro. Dados locais continuam isolados deste Memor QA.

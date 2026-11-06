@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { isValidCoordinate, type SavedCoordinate } from "../domain/discovery";
 import {
   isPlace, makeArtwork, makePlace, type ArtworkDraft, type ArtworkKind,
   type LabPlace, type Vec3,
@@ -9,7 +10,8 @@ const STORAGE_KEY = "@memor-qa/ar-lab-places-v1";
 type PlaceStoreValue = {
   places: LabPlace[];
   hydrated: boolean;
-  createPlace(title: string): Promise<string>;
+  createPlace(title: string, coordinate?: SavedCoordinate): Promise<string>;
+  updateCoordinate(placeId: string, coordinate: SavedCoordinate): Promise<void>;
   addArtwork(placeId: string, kind: ArtworkKind, title: string, position: Vec3): Promise<ArtworkDraft>;
   deletePlace(placeId: string): Promise<void>;
 };
@@ -47,9 +49,10 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     return write;
   };
 
-  const createPlace = async (title: string) => {
+  const createPlace = async (title: string, coordinate?: SavedCoordinate) => {
     if (!hydrated) throw new Error("Aguarde o carregamento do arquivo local.");
-    const created = makePlace(title);
+    if (coordinate && !isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
+    const created = makePlace(title, new Date(), coordinate);
     await save([created, ...current.current]);
     return created.id;
   };
@@ -68,11 +71,18 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
     return art;
   };
 
+  const updateCoordinate = async (placeId: string, coordinate: SavedCoordinate) => {
+    if (!isValidCoordinate(coordinate)) throw new Error("Coordenadas inválidas.");
+    if (!current.current.some((place) => place.id === placeId)) throw new Error("Lugar não encontrado.");
+    await save(current.current.map((place) => place.id === placeId
+      ? { ...place, coordinate, updatedAt: new Date().toISOString() } : place));
+  };
+
   const deletePlace = async (placeId: string) =>
     save(current.current.filter((place) => place.id !== placeId));
 
   return (
-    <Context.Provider value={{ places, hydrated, createPlace, addArtwork, deletePlace }}>
+    <Context.Provider value={{ places, hydrated, createPlace, updateCoordinate, addArtwork, deletePlace }}>
       {children}
     </Context.Provider>
   );

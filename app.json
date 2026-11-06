@@ -14,7 +14,8 @@
         "NSLocalNetworkUsageDescription": "O Memor QA precisa acessar o servidor de desenvolvimento Metro neste computador para executar os testes durante o desenvolvimento.",
         "NSBonjourServices": [
           "_expo._tcp"
-        ]
+        ],
+        "NSLocationWhenInUseUsageDescription": "O Memor usa a localização, quando autorizada, para mostrar intervenções próximas e registrar lugares."
       }
     },
     "android": {
@@ -44,6 +45,12 @@
           "ios": {
             "cameraUsagePermission": "O Memor usa a câmera para detectar superfícies e posicionar obras em realidade aumentada."
           }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O Memor usa a localização, quando autorizada, para mostrar intervenções próximas e registrar lugares."
         }
       ]
     ],
