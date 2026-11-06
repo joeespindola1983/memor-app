@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { isValidCoordinate, type SavedCoordinate } from "../domain/discovery";
 import { isCaptureEvidence, type CaptureEvidence } from "../domain/capture";
 import {
-  isPlace, makeArtwork, makePlace, type ArtworkDraft, type ArtworkKind,
+  isPlace, makeArtwork, makePlace, cleanTitle, type ArtworkDraft, type ArtworkKind,
   type LabPlace, type Vec3,
 } from "../domain/models";
 
@@ -86,7 +86,7 @@ export function PlaceProvider({ children }: { children: ReactNode }) {
   };
 
   const updateArtwork = async (placeId: string, artworkId: string, title: string, position?: Vec3) => {
-    const name = title.trim().replace(/\\s+/g, " ").slice(0, 72);
+    const name = cleanTitle(title);
     if (!name) throw new Error("Informe o texto da intervenção.");
     if (position && (position.length !== 3 || !position.every(Number.isFinite))) {
       throw new Error("Posição inválida.");
