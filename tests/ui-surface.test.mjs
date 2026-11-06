@@ -7,7 +7,8 @@ const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf
 test("iOS capture uses the local ARKit map engine behind the RN interface", () => {
   const code = read("app/capture/index.tsx");
   const config = read("app.config.ts");
-  assert.match(code, /Platform\.OS === "ios" && MemorWorldMapView/);
+  assert.match(code, /if \(Platform\.OS === "ios"\)/);
+  assert.match(code, /return MemorWorldMapView \? <NativeCapturePlaceScreen/);
   assert.match(code, /await camera\.current\.saveMap\(\)/);
   assert.match(code, /scanBridge\.markNativeWorldMap\(archive\)/);
   assert.match(code, /GUARDAR LUGAR/);
