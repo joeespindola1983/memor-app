@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View, type ReactNode } from "react-native";
+import type { ReactNode } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLLECTIONS, type EditorialCollection, type EditorialFilter } from "../domain/editorial";
 import { PixelLabel } from "./PixelLabel";
