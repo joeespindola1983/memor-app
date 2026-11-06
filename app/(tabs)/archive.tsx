@@ -8,7 +8,7 @@ import { tokens } from "../../src/theme/tokens";
 
 export default function ArchiveScreen() {
   const router=useRouter();
-  const { places }=usePlaces();
+  const { places, loadError }=usePlaces();
   const sorted=savedPlacesCatalog(places);
   const artworks=sorted.flatMap((place)=>place.artworks.map((art)=>({place,art})))
     .sort((a,b)=>b.art.createdAt.localeCompare(a.art.createdAt));
@@ -19,6 +19,7 @@ export default function ArchiveScreen() {
         <Text style={[editorial.heading,{fontSize:47,letterSpacing:-2.3}]}>Arte deixada{"\n"}no caminho.</Text>
         <Text style={editorial.body}>Intervenções digitais que só existem quando você ocupa o mesmo espaço.</Text>
         <PixelLabel color={tokens.muted}>RASCUNHOS PRIVADOS · NESTE APARELHO</PixelLabel>
+        {loadError ? <Text style={{color:tokens.poetry,fontSize:13}}>{loadError}</Text>:null}
       </View>
 
       <MemorSection eyebrow={`${sorted.length} LUGARES SALVOS`}>

@@ -13,7 +13,7 @@ import { shared, tokens } from "../../src/theme/tokens";
 
 export default function NewPlace() {
   const router = useRouter();
-  const { createPlace, hydrated } = usePlaces();
+  const { createPlace, hydrated, loadError } = usePlaces();
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -72,7 +72,8 @@ export default function NewPlace() {
             style={shared.input} maxLength={72} autoCorrect autoCapitalize="sentences"
           />
           <PixelLabel>{cleanTitle(title).length}/72 CARACTERES</PixelLabel>
-          {error ? <Text style={{ color: "#A23D34" }}>{error}</Text> : null}
+          {loadError ? <Text style={{ color: tokens.poetry }}>{loadError}</Text> : null}
+          {error ? <Text style={{ color: tokens.poetry }}>{error}</Text> : null}
         </View>
         <View style={{ gap: 10 }}>
           <PixelLabel>02 / LOCALIZAÇÃO · OPCIONAL</PixelLabel>
@@ -85,7 +86,7 @@ export default function NewPlace() {
         <View style={{ gap: 10 }}>
           <ActionButton
             label="CRIAR LUGAR"
-            disabled={!hydrated || !cleanTitle(title) || saving}
+            disabled={!hydrated || Boolean(loadError) || !cleanTitle(title) || saving}
             loading={saving} onPress={create}
           />
           <Text style={[shared.secondary, { textAlign: "center", fontSize: 11 }]}>
