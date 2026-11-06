@@ -80,7 +80,8 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
   }
 
   async function capturePhoto() {
-    if (!native.current || busy || pendingPhoto) return;
+    const camera = native.current;
+    if (!camera || busy || pendingPhoto) return;
     setProblem("");
     setNote("");
     trace("rn.photo.permission.requested");
@@ -93,7 +94,7 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
       }
       setBusy(true);
       trace("rn.photo.camera.opening");
-      await native.current.pauseForPhoto();
+      await camera.pauseForPhoto();
       try {
         const result = await ImagePicker.launchCameraAsync({
           mediaTypes: ["images"],
@@ -109,7 +110,7 @@ export function WorldMapExperience({ place }: { place: LabPlace }) {
           setNote("Foto capturada. Reconheça novamente o local para fixá-la na mira.");
         }
       } finally {
-        await native.current.resumeAfterPhoto();
+        await camera.resumeAfterPhoto();
         trace("rn.photo.camera.resumed");
       }
     } catch (error) {
