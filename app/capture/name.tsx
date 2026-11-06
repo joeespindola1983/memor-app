@@ -14,6 +14,7 @@ export default function NameCapturedPlace() {
   const router=useRouter();
   const {createPlace,hydrated,loadError}=usePlaces();
   const evidence=scanBridge.takePending();
+  const hosted=scanBridge.takePendingAnchor();
   const [name,setName]=useState("");
   const [coordinate,setCoordinate]=useState<SavedCoordinate|null>(null);
   const [locating,setLocating]=useState(false);
@@ -39,7 +40,7 @@ export default function NameCapturedPlace() {
     if(!evidence || saving || !cleanTitle(name))return;
     setSaving(true);setProblem("");
     try {
-      const id=await createPlace(name,coordinate??undefined,evidence);
+      const id=await createPlace(name,coordinate??undefined,evidence,hosted??undefined);
       scanBridge.clearPending();
       router.replace({pathname:"/places/[id]",params:{id,justCaptured:"1"}});
     }catch(e){setProblem(e instanceof Error?e.message:"Não foi possível salvar o lugar.");}
@@ -54,7 +55,7 @@ export default function NameCapturedPlace() {
         <MemorBack label="REFAZER VARREDURA" onPress={()=>{
           scanBridge.clearPending();router.replace("/capture");
         }}/>
-        <PixelLabel>MEMOR / LOCAL OBSERVADO / 02</PixelLabel>
+        <PixelLabel>MEMOR / {hosted ? "MAPA VPS HOSPEDADO" : "LOCAL OBSERVADO"} / 02</PixelLabel>
         <Text style={[editorial.heading,{fontSize:36}]}>Como se chama{"\n"}este lugar?</Text>
         <Text style={editorial.muted}>
           A sessão de RA foi encerrada para que você possa digitar sem câmera ou processamento espacial ativo.
@@ -74,9 +75,18 @@ export default function NameCapturedPlace() {
               :"Ao menos um plano detectado durante a observação."}
           </Text>
           <Text style={[editorial.muted,{fontSize:12}]}>
-            Isso NÃO é um mapa 3D restaurável. As intervenções criadas neste estágio permanecem rascunhos locais.
+            {hosted
+              ? "Mapa VPS hospedado no ReactVision. Uma nova sessão poderá tentar reconhecer este espaço. O Memor mantém o identificador e o conteúdo da obra neste aparelho."
+              : "Esta observação NÃO contém mapa relocalizável. Para revisitar a posição real, hospede uma âncora VPS."}
           </Text>
         </View>
+        {hosted ? (
+          <View style={{gap:5,padding:13,borderWidth:1,borderColor:tokens.ink}}>
+            <PixelLabel color={tokens.ink}>✓ ÂNCORA ESPACIAL HOSPEDADA</PixelLabel>
+            <Text style={editorial.muted}>ID: {hosted.cloudAnchorId.slice(0,22)}…</Text>
+            <Text style={editorial.muted}>Válida para teste até {new Date(hosted.expiresAt).toLocaleDateString("pt-BR")}.</Text>
+          </View>
+        ) : null}
         <View style={{gap:10}}>
           <PixelLabel>LOCALIZAÇÃO / OPCIONAL</PixelLabel>
           <MemorActionButton outline onPress={geotag} disabled={locating}
@@ -85,7 +95,7 @@ export default function NameCapturedPlace() {
         {loadError ? <Text style={{color:tokens.poetry}}>{loadError}</Text>:null}
         {problem ? <Text style={{color:tokens.poetry}}>{problem}</Text>:null}
         <View style={{flex:1}}/>
-        <MemorActionButton onPress={save} label={saving?"SALVANDO...":"SALVAR LUGAR LOCAL"}
+        <MemorActionButton onPress={save} label={saving?"SALVANDO...":hosted?"SALVAR LUGAR COM VPS":"SALVAR LUGAR LOCAL"}
           disabled={saving||!hydrated||Boolean(loadError)||!cleanTitle(name)}/>
         <Text style={[editorial.muted,{fontSize:11}]}>
           Sem Supabase e sem publicação automática. O Memor antigo permanece intacto.
