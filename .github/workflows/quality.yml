@@ -2,8 +2,12 @@ name: React Native QA checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
