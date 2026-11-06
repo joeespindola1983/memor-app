@@ -1,4 +1,5 @@
-import { ViroARSceneNavigator } from "@reactvision/react-viro";
+import { ViroARSceneNavigator, parseLocationTransform, worldToLocation } from "@reactvision/react-viro";
+import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -25,6 +26,16 @@ export default function ARExperience() {
   const firstScene = useMemo(() => ({ scene: ARLabScene }), []);
   const session = useARSession();
   const tracking = useSceneTracking();
+  const rvConfigured = Constants.expoConfig?.extra?.reactvisionConfigured === true;
+  const hasCloudAnchor = Boolean(place?.cloudAnchor);
+  const spatialReady = !hasCloudAnchor || (rvConfigured && tracking.anchorLocalized);
+  const anchoredArtworks = place?.cloudAnchor
+    ? place.artworks.filter((art) =>
+        art.locationPosition && art.locationAnchorId === place.cloudAnchor?.cloudAnchorId)
+    : [];
+  const moveableArtworks = hasCloudAnchor
+    ? (tracking.anchorLocalized ? anchoredArtworks : [])
+    : session.artworks;
   const [kind, setKind] = useState<ArtworkKind>("text");
   const [label, setLabel] = useState("Minha primeira intervenção");
   const [placing, setPlacing] = useState(false);
@@ -37,6 +48,17 @@ export default function ARExperience() {
     if (id) arSession.start(String(id));
     return () => arSession.clear();
   }, [id]);
+
+  function anchorPosition(worldPosition: [number, number, number]): [number, number, number] | undefined {
+    if (!hasCloudAnchor) return undefined;
+    if (!rvConfigured) throw new Error("Configure a chave e o Project ID ReactVision antes de posicionar obras persistentes.");
+    const token = sceneBridge.getAnchorFrame();
+    const matrix = parseLocationTransform(token);
+    if (!matrix) throw new Error("O lugar ainda não foi reconhecido. Explore o ambiente devagar.");
+    const local = worldToLocation(matrix, worldPosition);
+    if (!local || !local.every(Number.isFinite)) throw new Error("Não foi possível converter a posição para a âncora.");
+    return [local[0], local[1], local[2]];
+  }
 
   async function placeAtReticle() {
     if (!place || placing || session.mode !== "create") return;
@@ -60,7 +82,8 @@ export default function ARExperience() {
           ? "O raycast não encontrou referências neste ponto. Explore o quarto devagar e volte a apontar para a cama."
           : "O ARKit encontrou referências, mas nenhuma superfície utilizável. Tente mudar o ângulo ou se aproximar.");
       }
-      const saved = await addArtwork(place.id, kind, label, placement.position);
+      const locationPosition = anchorPosition(placement.position);
+      const saved = await addArtwork(place.id, kind, label, placement.position, locationPosition);
       arSession.addArtwork(saved);
       setMessage(placement.source === "plane"
         ? "Plano reconhecido. Intervenção posicionada: toque em VISUALIZAR."
@@ -76,7 +99,9 @@ export default function ARExperience() {
 
   async function moveSelectedArtwork() {
     if (!place || !movingID || placing) return;
-    const artwork = session.artworks.find((item) => item.id === movingID);
+    const artwork = hasCloudAnchor
+      ? anchoredArtworks.find((item) => item.id === movingID)
+      : session.artworks.find((item) => item.id === movingID);
     if (!artwork) { setMovingID(null); return; }
     setPlacing(true);setProblem("");
     try {
@@ -85,7 +110,11 @@ export default function ARExperience() {
       setLastHitSummary(summarizeHits(hits));
       const placement=selectPlacementHit(hits);
       if (!placement) throw new Error("Nenhuma superfície utilizável sob a mira.");
-      const updated=await updateArtwork(place.id,artwork.id,artwork.title,placement.position);
+      if (hasCloudAnchor && !artwork.locationPosition) {
+        throw new Error("Esta obra é anterior ao VPS e não possui posição recuperável.");
+      }
+      const locationPosition = anchorPosition(placement.position);
+      const updated=await updateArtwork(place.id,artwork.id,artwork.title,placement.position,locationPosition);
       arSession.replaceArtwork(updated);
       setMovingID(null);
       setMessage(placement.source === "estimated"
@@ -102,7 +131,7 @@ export default function ARExperience() {
     <View style={styles.root}>
       <ViroARSceneNavigator
         initialScene={firstScene}
-        provider="none"
+        provider={rvConfigured ? "reactvision" : "none"}
         depthEnabled={true}
         hdrEnabled={false}
         style={StyleSheet.absoluteFill}
@@ -119,7 +148,18 @@ export default function ARExperience() {
         <Text style={{ color: tokens.ink, fontSize: 22, fontWeight: "700", marginTop: 9 }}>
           {place.title}
         </Text>
-        <PixelLabel color={tokens.muted}>LABORATÓRIO RA · {session.artworks.length} NESTA SESSÃO</PixelLabel>
+        <PixelLabel color={tokens.muted}>
+          {hasCloudAnchor ? `VPS · ${anchoredArtworks.length} OBRAS ANCORADAS` :
+            `LABORATÓRIO RA · ${session.artworks.length} NESTA SESSÃO`}
+        </PixelLabel>
+        {hasCloudAnchor ? (
+          <PixelLabel color={tracking.anchorLocalized ? tokens.ink : tokens.poetry}>
+            {!rvConfigured ? "VPS NÃO CONFIGURADO NESTE BUILD" :
+              tracking.anchorLocalized ? "● LUGAR RECONHECIDO · OBRAS RECUPERADAS" :
+              tracking.localizationError ? `FALHA VPS: ${tracking.localizationError}` :
+              "◌ RECONHECENDO LUGAR · OBSERVE AS REFERÊNCIAS ORIGINAIS"}
+          </PixelLabel>
+        ) : null}
         <PixelLabel color={tracking.status === "ready" ? tokens.dark : tokens.muted}>
           {tracking.status === "ready" ? "● RASTREAMENTO ATIVO" : tracking.status === "limited" ? "◌ RASTREAMENTO LIMITADO" : "◌ INICIANDO ARKIT / ARCORE"}
         </PixelLabel>
@@ -167,17 +207,19 @@ export default function ARExperience() {
                 placeholder="Nome da obra" placeholderTextColor={tokens.muted}
               />
               <ActionButton label="POSICIONAR NA MIRA +" loading={placing}
-                disabled={!label.trim() || placing || tracking.status !== "ready" || !tracking.hasCameraDirection}
+                disabled={!label.trim() || placing || tracking.status !== "ready" || !tracking.hasCameraDirection || !spatialReady}
                 onPress={placeAtReticle}/>
             </View>
           ) : (
             <View style={{ gap: 9 }}>
               <PixelLabel>VISUALIZAÇÃO / MESMA SESSÃO</PixelLabel>
-              <Text style={shared.body}>{session.artworks.length === 0
+              <Text style={shared.body}>{hasCloudAnchor && !tracking.anchorLocalized
+                ? "Aguardando a recuperação do mapa. Mova a câmera devagar pelo lugar original."
+                : moveableArtworks.length === 0
                 ? "Crie uma intervenção nesta sessão para vê-la posicionada no ambiente."
-                : `${session.artworks.length} intervenções desta sessão. Selecione uma obra para movê-la.`}
+                : `${moveableArtworks.length} intervenções disponíveis. Selecione uma obra para movê-la.`}
               </Text>
-              {session.artworks.map((art) => (
+              {moveableArtworks.map((art) => (
                 <Pressable key={art.id} accessibilityRole="button"
                   onPress={()=>setMovingID(art.id)}
                   style={{padding:9,borderWidth:1,borderColor:movingID===art.id?tokens.ink:tokens.line,
@@ -186,11 +228,12 @@ export default function ARExperience() {
                 </Pressable>
               ))}
               {movingID ? <ActionButton label="MOVER PARA A MIRA" loading={placing}
-                disabled={placing||tracking.status!=="ready"||!tracking.hasCameraDirection}
+                disabled={placing||tracking.status!=="ready"||!tracking.hasCameraDirection||!spatialReady}
                 onPress={moveSelectedArtwork}/> : null}
               <Text style={shared.secondary}>
-                Obras anteriores permanecem no Arquivo, mas NÃO foram restauradas espacialmente.
-                Sair da câmera encerra esta referência até implementarmos VPS/Cloud Anchor.
+                {hasCloudAnchor
+                  ? "O ReactVision recupera as obras salvas no frame da âncora VPS. Obras antigas sem frame permanecem no Arquivo."
+                  : "Sem âncora VPS, obras antigas permanecem no Arquivo e não são restauradas espacialmente."}
               </Text>
             </View>
           )}
