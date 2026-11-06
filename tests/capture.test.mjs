@@ -28,3 +28,13 @@ test("save flow cannot skip scanning and naming", () => {
   assert.equal(transitionCapture("saved","open"),"viewing");
   assert.equal(transitionCapture("naming","rescan"),"scanning");
 });
+
+import { unavailableSpatialProvider, SpatialNotConfiguredError } from "../src/domain/spatialProvider.ts";
+
+test("QA scan never masquerades as a durable spatial anchor", async () => {
+  assert.equal(unavailableSpatialProvider.supportsCrossSessionRelocalization,false);
+  await assert.rejects(unavailableSpatialProvider.capturePlace("qa-test"), SpatialNotConfiguredError);
+  await assert.rejects(unavailableSpatialProvider.resolvePlace({
+    provider:"reactvision-vps",placeID:"qa-test",anchorID:"fake",createdAt:new Date().toISOString(),
+  }), SpatialNotConfiguredError);
+});
