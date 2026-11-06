@@ -72,9 +72,9 @@ export default function MapScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: tokens.map }}>
       {canShowMap ? (
-        <MapView ref={mapRef} style={StyleSheet.absoluteFillObject}
+        <MapView ref={mapRef} style={StyleSheet.absoluteFill}
           mapType="standard"
-          showsPointsOfInterest={false}
+          showsPointsOfInterests={false}
           showsBuildings={false}
           initialRegion={BRASILIA_OVERVIEW}
           onRegionChangeComplete={setRegion}
@@ -97,7 +97,7 @@ export default function MapScreen() {
         </View>
       )}
 
-      <View pointerEvents="box-none" style={{...StyleSheet.absoluteFillObject, justifyContent:"space-between"}}>
+      <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, {justifyContent:"space-between"}]}>
         <View style={{ padding:12,paddingTop:20,gap:12 }}>
           <EditorialFilterBar value={filter} onChange={(next)=>{
             setFilter(next);setSelectedID(null);
