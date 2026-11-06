@@ -5,7 +5,7 @@ import {
 } from "../domain/capture";
 import { isVec3 } from "./hitTest";
 import type { Vec3 } from "../domain/models";
-import type { HostedVPSAnchor } from "../domain/cloudAnchor";
+import type { HostedVPSAnchor, NativeScanStatus } from "../domain/cloudAnchor";
 
 let status: ScanProgress = initialScan;
 let lastCamera: Vec3 | null = null;
@@ -17,6 +17,34 @@ const anchors = new Set<string>();
 const listeners = new Set<() => void>();
 let pendingCapture: CaptureEvidence | null = null;
 let pendingAnchor: HostedVPSAnchor | null = null;
+
+/** Exact subset of the ViroARSceneNavigator scene-injected API (3.0.3).
+ * Calls must use the navigator supplied to CaptureScene, NOT a ViroARScene ref.
+ */
+export type VPSNavigator = {
+  startScan(): void;
+  finishScan(ttlDays?: number): Promise<{
+    success: boolean;
+    cloudAnchorId?: string;
+    locationTransform?: string;
+    error?: string;
+    diagnostics?: {
+      valid: boolean;
+      keyframes?: number;
+      triangulatedPoints?: number;
+      viewpointPairs?: number;
+      spreadMeters?: number;
+      minPoints?: number;
+      minViewpointPairs?: number;
+      minSpreadMeters?: number;
+    };
+  }>;
+  getScanStatus(): Promise<NativeScanStatus>;
+  cancelCloudAnchorOperations(): void;
+};
+
+let nav: VPSNavigator | null = null;
+
 
 function emit(next: ScanProgress) {
   if (next === status) return;
@@ -39,6 +67,29 @@ export const scanBridge = {
     return runID;
   },
   getRunID() { return runID; },
+  registerVPSNavigator(next: VPSNavigator) {
+    nav = next;
+    return () => {
+      if (nav === next) {
+        nav = null;
+      }
+    };
+  },
+  startVPS() {
+    if (!nav) throw new Error("A cena VPS ainda não está pronta.");
+    nav.startScan();
+  },
+  async getVPSStatus(): Promise<NativeScanStatus> {
+    if (!nav) return { available: false, error: "A câmera VPS não está pronta." };
+    return nav.getScanStatus();
+  },
+  async finishVPS(ttlDays = 7) {
+    if (!nav) throw new Error("A câmera VPS não está pronta.");
+    return nav.finishScan(ttlDays);
+  },
+  cancelVPS() {
+    try { nav?.cancelCloudAnchorOperations(); } catch { /* native already unmounted */ }
+  },
   getSnapshot: () => status,
   subscribe(listener: () => void) {
     listeners.add(listener);
