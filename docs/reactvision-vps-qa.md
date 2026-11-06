@@ -18,11 +18,16 @@ cp .env.example .env
 # REACTVISION_CLIENT_KEY=<a chave rv_client_ fornecida pelo dono do projeto>
 # REACTVISION_PROJECT_ID=381827b7-e4e6-422a-98f9-733c861f3f39 (já vem preenchido na branch)
 npm install
+npm run vps:doctor   # obrigatoriamente deve informar provider=reactvision
 npm run test
 npm run typecheck
 npx expo install --check
 npx expo prebuild --clean --platform ios
-npx expo run:ios --device
+npm run vps:doctor   # verificar RVApiKey/RVProjectId no Info.plist sem exibir a chave
+# Encerre qualquer Metro antigo antes de testar o novo JavaScript.
+npx expo start --dev-client --lan --clear
+# Em outra janela de terminal:
+npx expo run:ios --device --no-bundler
 ```
 
 **É obrigatório recompilar** depois de preencher a chave de cliente, porque `app.config.ts` injeta `RVApiKey` e `RVProjectId` no código nativo. Não basta recarregar o Metro. Para Android, requer dispositivo ARCore certificado e build Android com a mesma configuração.
@@ -75,3 +80,17 @@ Registrar: versão do dispositivo, iOS/Android, resultado das contagens do scan,
 - https://github.com/ReactVision/viro/blob/main/components/AR/ViroLocationFrame.ts
 
 Não fazer merge antes de passar por QA em hardware e CI.
+
+## Diagnóstico 2026-11-06 — o que motivou o guard de configuração
+
+Nos logs do iPhone, `[ViroAR] Setting cloud anchor provider: none` e `[ViroAR] Cloud Anchors disabled` repetiram-se **7 vezes** em novas sessões. Isso é prova de que as âncoras NÃO estavam ativas; os hit tests de ARKit podiam funcionar, mas nenhuma pose seria recuperável.
+
+Ao testar:
+- **Cabeçalho VPS QA**: manifesto runtime configurado.
+- **Cabeçalho LOCAL**: configuração ainda não carregada pelo app; não testar revisita.
+- `npm run vps:doctor`: identifica falta de client key / divergência do plugin Expo / divergência do Info.plist nativo sem revelar a chave.
+- Registrar `[Memor VPS] Capture configuration` e `[Memor VPS] Opening AR place` (sem chaves).
+- No cadastro de lugar, só considerar VPS real quando houver confirmação **ÂNCORA ESPACIAL HOSPEDADA**, ID e expiração.
+- Os lugares capturados com `provider=none` não têm cloudAnchorId e não passam a ser reconhecíveis por instalar um build VPS. Criar um novo lugar e novas obras.
+
+Se `npm run vps:doctor` passar e o log nativo continuar mostrando `provider: none`, confirmar se um Metro antigo está servindo o JS, se o iPhone executa o build `com.espindola.memor.app.qa` atualizado e se a configuração pública foi atualizada. Não remover/desinstalar o app QA sem backup, pois isso pode apagar o AsyncStorage.
