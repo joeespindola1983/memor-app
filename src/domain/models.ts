@@ -110,6 +110,7 @@ export function isPlace(value: unknown): value is LabPlace {
       typeof place.cloudAnchor.cloudAnchorId === "string" && place.cloudAnchor.cloudAnchorId.length > 0 &&
       typeof place.cloudAnchor.locationTransform === "string" &&
       place.cloudAnchor.locationTransform.split(",").length === 16 &&
+      place.cloudAnchor.locationTransform.split(",").every(v => v.trim().length>0 && Number.isFinite(Number(v))) &&
       typeof place.cloudAnchor.hostedAt === "string" && Number.isFinite(Date.parse(place.cloudAnchor.hostedAt)) &&
       typeof place.cloudAnchor.expiresAt === "string" && Number.isFinite(Date.parse(place.cloudAnchor.expiresAt)) &&
       typeof place.cloudAnchor.ttlDays === "number" && Number.isInteger(place.cloudAnchor.ttlDays) &&
