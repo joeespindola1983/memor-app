@@ -10,8 +10,12 @@ import { loadEnvFile } from "node:process";
 // Config evaluation can precede Expo CLI's dotenv loader. Read the root .env
 // explicitly (Node 22+), respecting environment variables already supplied by
 // CI/EAS/shell. Never log the client key or persist it in the repository.
-const envPath = resolve(process.cwd(), ".env");
-if (existsSync(envPath)) loadEnvFile(envPath);
+// Accept Expo's local override as well as the usual .env file. Node's
+// loadEnvFile preserves values already set by CI / the calling shell.
+for (const filename of [".env.local", ".env"]) {
+  const path = resolve(process.cwd(), filename);
+  if (existsSync(path)) loadEnvFile(path);
+}
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const settings = base.expo as unknown as ExpoConfig;

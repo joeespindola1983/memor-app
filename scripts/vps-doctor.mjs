@@ -9,8 +9,9 @@ import { loadEnvFile } from "node:process";
 import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
-const file = resolve(root, ".env");
-if (existsSync(file)) loadEnvFile(file);
+const localFiles = [".env.local", ".env"];
+const existingFiles = localFiles.filter(filename => existsSync(resolve(root, filename)));
+for (const filename of existingFiles) loadEnvFile(resolve(root, filename));
 const key = process.env.REACTVISION_CLIENT_KEY?.trim() ?? "";
 const expectedProject = process.env.REACTVISION_PROJECT_ID?.trim()
   || "381827b7-e4e6-422a-98f9-733c861f3f39";
@@ -22,8 +23,20 @@ function fail(message) {
 function pass(message) { console.log("✓ " + message); }
 
 if (!key.startsWith("rv_client_") || key.length < 32) {
-  fail("REACTVISION_CLIENT_KEY ausente ou inválida no .env.");
-  console.log("  Edite .env e adicione a chave pública rv_client_... (sem aspas extras).");
+  if (existingFiles.length === 0) {
+    fail("Não existe .env nem .env.local na raiz deste projeto.");
+    console.log("  Crie o arquivo com: cp -n .env.example .env");
+  } else {
+    const mentionsKey = existingFiles.some(filename =>
+      /^\\s*REACTVISION_CLIENT_KEY\\s*=/m.test(readFileSync(resolve(root, filename), "utf8")));
+    if (!mentionsKey) fail("Os arquivos de ambiente existentes não definem REACTVISION_CLIENT_KEY.");
+    else if (key.length === 0) fail("REACTVISION_CLIENT_KEY está vazia ou outra variável de ambiente vazia está prevalecendo.");
+    else fail("REACTVISION_CLIENT_KEY não tem formato rv_client_ válido (não exibir o valor no terminal).");
+    console.log("  Arquivos verificados: " + existingFiles.join(", "));
+  }
+  console.log("  Edite .env ou .env.local e coloque REACTVISION_CLIENT_KEY=rv_client_... (sem espaços ao redor do =).");
+  console.log("  Confirme a edição com este comando; ele só mostra quantidade de caracteres:");
+  console.log("    node --env-file-if-exists=.env -e 'console.log((process.env.REACTVISION_CLIENT_KEY || \"\").length)'");
   process.exit(1);
 }
 pass("Chave pública de cliente encontrada; valor oculto.");
