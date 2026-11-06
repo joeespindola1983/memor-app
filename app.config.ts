@@ -1,20 +1,18 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import base from "./app.json";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-import { loadEnvFile } from "node:process";
 
 // The RV client key is PUBLIC by design, but keep per-project credentials out
 // of Git. The Expo config plugin embeds them in the iOS/Android native build.
 // Never configure or ship a ReactVision secret/admin key in the mobile app.
-// Config evaluation can precede Expo CLI's dotenv loader. Read the root .env
-// explicitly (Node 22+), respecting environment variables already supplied by
-// CI/EAS/shell. Never log the client key or persist it in the repository.
-// Accept Expo's local override as well as the usual .env file. Node's
-// loadEnvFile preserves values already set by CI / the calling shell.
+// Node 22 is already required by the project. Load .env without importing
+// Node-only modules into Expo's mobile TypeScript compilation. Existing
+// environment variables from CI/EAS/shell take precedence; never log the key.
 for (const filename of [".env.local", ".env"]) {
-  const path = resolve(process.cwd(), filename);
-  if (existsSync(path)) loadEnvFile(path);
+  try {
+    (process as { loadEnvFile?: (file: string) => void }).loadEnvFile?.(filename);
+  } catch (error: unknown) {
+    if ((error as { code?: string }).code !== "ENOENT") throw error;
+  }
 }
 
 export default ({ config }: ConfigContext): ExpoConfig => {
